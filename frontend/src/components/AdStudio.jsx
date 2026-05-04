@@ -11,6 +11,7 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { usePolling } from '../hooks/usePolling';
 import { ensureArray } from '../utils/collections';
 import { resizeImageForUpload, estimateBase64BodyBytes, MAX_COMBINED_BODY_BYTES } from '../utils/imageResize';
+import scrollIntoColumn from '../utils/scrollIntoColumn';
 
 // Helper: resize a file then base64-encode it. Logs the size delta to console for diagnostics.
 async function resizeAndBase64(file) {
@@ -195,6 +196,11 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
   const [promptGuidelines, setPromptGuidelines] = useState(project?.prompt_guidelines || '');
   const [guidelinesSaving, setGuidelinesSaving] = useState(false);
   const guidelinesTimer = useRef(null);
+
+  // V2 layout modes
+  const [viewMode, setViewMode] = useState('single'); // 'single' | 'batch'
+  const [lastGeneratedImageUrl, setLastGeneratedImageUrl] = useState(null);
+  const [promptEditorOpen, setPromptEditorOpen] = useState(false);
 
   // Optional fields collapse
   const [optionalOpen, setOptionalOpen] = useState(false);
@@ -836,7 +842,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
   };
 
   // --- Generation ---
-  const isCustomPromptMode = customPrompt.trim().length > 0;
+  const isCustomPromptMode = customPrompt.trim().length > 0 || promptEditorOpen;
 
   // Helper to update a specific generation entry
   const updateGen = (genId, updates) => {
@@ -1044,6 +1050,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         updateGen(genId, { status: 'completed', message: 'Ad generated successfully!', progress: 100 });
         const nextAd = normalizeAdRecord(event.ad);
         setAds(prev => [nextAd, ...prev.filter(ad => ad.id !== nextAd.id)]);
+        if (nextAd.imageUrl) setLastGeneratedImageUrl(nextAd.imageUrl);
       } else if (event.type === 'error') {
         updateGen(genId, { error: event.error, status: null });
       }
@@ -1460,6 +1467,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         updateGen(genId, { status: 'completed', message: 'Ad regenerated successfully!', progress: 100 });
         const nextAd = normalizeAdRecord(event.ad);
         setAds(prev => [nextAd, ...prev.filter(existing => existing.id !== nextAd.id)]);
+        if (nextAd.imageUrl) setLastGeneratedImageUrl(nextAd.imageUrl);
       } else if (event.type === 'error') {
         updateGen(genId, { error: event.error, status: null });
       }
@@ -1873,48 +1881,104 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
       <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-8 mb-2">
         <EditorialPageHeader
           eyebrow={`${(project?.brand || project?.name || 'AD STUDIO').toUpperCase()} · AD STUDIO`}
-          title="Ad Studio"
-          meta={adStudioMeta}
-        />
+          title="Compose a new ad"
+          meta="Pick a template, decide on the product image, choose a model. Optional fields: topic, angle, headline, body copy, and prompt guidelines are auto-generated if left blank."
+        >
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode(viewMode === 'single' ? 'batch' : 'single')}
+              className="ed-ghost !text-[12px] !py-1.5 !px-3"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
+              {viewMode === 'batch' ? 'Switch to Single' : 'Switch to Batch'}
+            </button>
+            <button
+              onClick={() => {
+                if (isCustomPromptMode) {
+                  setCustomPrompt(''); setParentAdId(null); setEditingAdImage(null); setEditInstruction(''); setOriginalPromptRef(''); setEditMode('describe'); setPromptUpdated(false); setEditReferenceFile(null); if (editReferencePreview) URL.revokeObjectURL(editReferencePreview); setEditReferencePreview(null); setPromptEditorOpen(false);
+                } else {
+                  setPromptEditorOpen(true);
+                }
+              }}
+              className="ed-ghost !text-[12px] !py-1.5 !px-3"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+              {isCustomPromptMode ? 'Exit Editor' : 'Prompt Editor'}
+            </button>
+          </div>
+        </EditorialPageHeader>
       </div>
 
-      {/* Generation Controls */}
-      <div className="ed-card p-6 md:p-8">
-        <div className="mb-5">
-          <h3 className="font-serif text-[20px] tracking-[-0.01em] text-ed-ink mb-1 flex items-center gap-1.5">
-            Generate ad
-            <InfoTooltip text="Create one ad creative at a time. Pick a template reference, decide whether to include the product image, then choose the image generator." position="right" />
-          </h3>
-          <p className="text-[12.5px] text-ed-ink3 leading-[1.5]">
-            Select a template image source, configure options, and generate a new ad creative.
-          </p>
-        </div>
+      {/* ═══════════ Two-Column Grid (single gen mode) ═══════════ */}
+      <div className="ad-studio-grid" style={{ display: viewMode === 'batch' ? 'none' : undefined }}>
 
-        {/* ── REQUIRED FIELDS ── */}
+        {/* ─── LEFT COLUMN: Preview + Queue ─── */}
+        <div className="ad-studio-left">
+          {/* Aspect Ratio Tabs */}
+          <div>
+            <label className="text-[11px] uppercase tracking-[0.14em] text-ed-ink3 mb-2 flex items-center gap-1 font-geist">
+              Aspect Ratio
+            </label>
+            <div className="segmented-control" role="tablist">
+              {ASPECT_RATIOS.map(ar => {
+                const subLabel = ar.label.match(/\(([^)]+)\)/)?.[1] || '';
+                return (
+                  <button
+                    key={ar.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={aspectRatio === ar.value}
+                    onClick={() => setAspectRatio(ar.value)}
+                    className={aspectRatio === ar.value ? 'active' : ''}
+                  >
+                    <span className="font-mono-ed text-[12.5px]">{ar.value}</span>
+                    {subLabel && <span className="ml-1.5 text-[11px] opacity-70">{subLabel}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-        {/* Aspect Ratio */}
-        <div className="mb-5">
-          <label className="text-[11px] uppercase tracking-[0.14em] text-ed-ink3 mb-2 flex items-center gap-1 font-geist">
-            Aspect Ratio
-            <InfoTooltip text="The image shape for the final ad. Choose the ratio that matches the placement you plan to use in Meta." position="right" />
-          </label>
-          <div className="segmented-control max-w-md">
-            {ASPECT_RATIOS.map(ar => {
-              const subLabel = ar.label.match(/\(([^)]+)\)/)?.[1] || '';
-              return (
-                <button
-                  key={ar.value}
-                  type="button"
-                  onClick={() => setAspectRatio(ar.value)}
-                  className={aspectRatio === ar.value ? 'active' : ''}
-                >
-                  <span className="font-mono-ed text-[12.5px]">{ar.value}</span>
-                  {subLabel && <span className="ml-1.5 text-[11px] opacity-70">{subLabel}</span>}
-                </button>
-              );
-            })}
+          {/* Preview Canvas */}
+          <div
+            className="w-full bg-ed-bg border border-ed-line rounded-xl overflow-hidden flex items-center justify-center"
+            style={{ aspectRatio: aspectRatio.replace(':', '/'), maxHeight: 'calc(100vh - 320px)' }}
+          >
+            {lastGeneratedImageUrl ? (
+              <img
+                src={lastGeneratedImageUrl}
+                alt="Last generated ad"
+                className="w-full h-full object-contain"
+              />
+            ) : activeGenCount > 0 ? (
+              <div className="flex flex-col items-center gap-3 p-8 text-center">
+                <div className="w-8 h-8 rounded-full border-2 border-ed-accent/30 border-t-ed-accent animate-spin" />
+                <p className="text-[13px] text-ed-ink2 font-serif">Generating...</p>
+                <p className="text-[11px] text-ed-ink3">{activeGenCount} generation{activeGenCount !== 1 ? 's' : ''} in progress</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 p-8 text-center">
+                <p className="text-[14px] text-ed-ink2 font-serif">Your generation will appear here</p>
+                <p className="text-[11.5px] text-ed-ink3">Fill the fields at right, then hit Generate.<br />Results appear in Ad Gallery below.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Generation Queue (scrollable) */}
+          <div style={{ maxHeight: 200, overflowY: 'auto' }} className="ed-scrollbar">
+            <GenerationQueue
+              ref={queueRef}
+              activeGens={activeGens}
+              genQueueExpanded={genQueueExpanded}
+              setGenQueueExpanded={setGenQueueExpanded}
+              activeGenCount={activeGenCount}
+              dismissGen={dismissGen}
+            />
           </div>
         </div>
+
+        {/* ─── RIGHT COLUMN: Controls ─── */}
+        <div className="ad-studio-right ed-scrollbar">
 
         {/* Template Image Source — hidden when using a custom prompt */}
         {!isCustomPromptMode && (
@@ -2419,6 +2483,30 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
           />
         </div>
 
+        {/* Image Model — always visible as button row */}
+        <div className="mb-5">
+          <label className="text-[11px] uppercase tracking-[0.14em] text-ed-ink3 mb-2 flex items-center gap-1 font-geist">
+            Image Model
+            <InfoTooltip text="Choose which image model renders the final ad. Gemini is the default path; GPT Image 2 requires verified OpenAI image-model access." position="right" />
+          </label>
+          <div className="segmented-control">
+            {[
+              { value: 'nano-banana-pro', label: 'Gemini 3 Pro' },
+              { value: 'nano-banana-2', label: 'Gemini 3.1 Flash' },
+              { value: 'gpt-image-2', label: 'GPT Image 2' },
+            ].map(m => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => setImageModel(m.value)}
+                className={imageModel === m.value ? 'active' : ''}
+              >
+                <span className="text-[11.5px]">{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* ── OPTIONAL FIELDS (collapsible) ── */}
         <div className="my-6">
           <button
@@ -2442,28 +2530,6 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
 
           {optionalOpen && (
             <div className="pt-5 pb-1 fade-in">
-              {/* Image model selector */}
-              <div className="mb-5">
-                <label className="text-[11px] uppercase tracking-[0.14em] text-ed-ink3 mb-2 flex items-center gap-1 font-geist">
-                  Image Generator
-                  <InfoTooltip text="Choose which image model renders the final ad. Gemini is the default path; GPT Image 2 requires verified OpenAI image-model access." position="right" />
-                </label>
-                <select
-                  value={imageModel}
-                  onChange={e => setImageModel(e.target.value)}
-                  className="text-[12px] text-ed-ink bg-ed-bg border border-ed-line rounded-lg px-3 py-2 w-full cursor-pointer hover:border-ed-accent/30 transition-colors"
-                >
-                  <option value="nano-banana-pro">Nano Banana Pro (Gemini 3 Pro)</option>
-                  <option value="nano-banana-2">Nano Banana 2 (Gemini 3.1 Flash)</option>
-                  <option value="gpt-image-2">GPT Image 2 (OpenAI)</option>
-                </select>
-                <p className="text-[10px] text-ed-ink3 mt-1">
-                  {imageModel === 'nano-banana-pro' && 'High-fidelity Gemini image generation.'}
-                  {imageModel === 'nano-banana-2' && 'Faster Gemini generation with improved text rendering, up to 4K (current default).'}
-                  {imageModel === 'gpt-image-2' && 'OpenAI image generation with layout + product references. Verify access in Settings with Test GPT Image 2; the check is user-triggered because it is billable.'}
-                </p>
-              </div>
-
               {(angle.trim() || headline.trim() || bodyCopy.trim()) && (
                 <div className="flex justify-end mb-1">
                   <button
@@ -2679,7 +2745,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
                 Edit Image
               </label>
               <button
-                onClick={() => { setCustomPrompt(''); setParentAdId(null); setEditingAdImage(null); setEditInstruction(''); setOriginalPromptRef(''); setEditMode('describe'); setPromptUpdated(false); setEditReferenceFile(null); if (editReferencePreview) URL.revokeObjectURL(editReferencePreview); setEditReferencePreview(null); }}
+                onClick={() => { setCustomPrompt(''); setParentAdId(null); setEditingAdImage(null); setEditInstruction(''); setOriginalPromptRef(''); setEditMode('describe'); setPromptUpdated(false); setEditReferenceFile(null); if (editReferencePreview) URL.revokeObjectURL(editReferencePreview); setEditReferencePreview(null); setPromptEditorOpen(false); }}
                 className="text-[12px] text-ed-rust hover:text-ed-rust transition-colors"
               >
                 Exit editing
@@ -2946,30 +3012,23 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
           </span>
         </div>
 
+        </div>{/* end right column */}
+      </div>{/* end ad-studio-grid */}
+
+      {/* ═══════════ Batch Mode (both mounted, display toggled) ═══════════ */}
+      <div style={{ display: viewMode === 'single' ? 'none' : undefined }}>
+        <BatchManager
+          projectId={projectId}
+          project={project}
+          onBatchComplete={loadAds}
+        />
       </div>
 
-      {/* Batch Generation */}
-      <BatchManager
-        projectId={projectId}
-        project={project}
-        onBatchComplete={loadAds}
-      />
-
-      {/* Ad Queue */}
-      <GenerationQueue
-        ref={queueRef}
-        activeGens={activeGens}
-        genQueueExpanded={genQueueExpanded}
-        setGenQueueExpanded={setGenQueueExpanded}
-        activeGenCount={activeGenCount}
-        dismissGen={dismissGen}
-      />
-
-      {/* Ad Gallery */}
+      {/* ═══════════ Recent Generations (full width below) ═══════════ */}
       <div ref={galleryRef} className="pt-4 border-t border-ed-line">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="font-serif text-[22px] tracking-[-0.01em] text-ed-ink flex items-center gap-1.5">Ad Gallery <InfoTooltip text="All generated ads for this project. QA Passed ads were approved by the Creative Filter and may already be in Ready to Post. QA Rejected ads have images but failed QA, so you can review, tag, download, or delete them." position="right" /></h3>
+            <h3 className="font-serif text-[22px] tracking-[-0.01em] text-ed-ink flex items-center gap-1.5">Recent generations <InfoTooltip text="All generated ads for this project. QA Passed ads were approved by the Creative Filter and may already be in Ready to Post. QA Rejected ads have images but failed QA, so you can review, tag, download, or delete them." position="right" /></h3>
             {ads.length > 0 && (
               <p className="text-[12px] text-ed-ink3">
                 {filteredAds.length} ad{filteredAds.length !== 1 ? 's' : ''}
@@ -3763,7 +3822,6 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         ),
         document.body
       )}
-      {/* (Queue is now inline above the Ad Gallery) */}
       {/* Floating bulk action bar */}
       {shouldShowBulkBar && createPortal(
         (

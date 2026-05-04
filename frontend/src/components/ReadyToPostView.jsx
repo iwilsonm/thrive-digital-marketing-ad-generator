@@ -7,6 +7,8 @@ import BulkEditPanel from './BulkEditPanel';
 import InfoTooltip from './InfoTooltip';
 // Phase 6.20a — backdate picker on manual Mark as Posted
 import MarkPostedModal from './MarkPostedModal';
+import FilterTabs from './shared/FilterTabs';
+import ThumbnailRow from './shared/ThumbnailRow';
 
 // Phase 6.20b — Drop the api.js flex_ad adapter from this view. Compose the
 // flex-shape inline from native ad_sets + deployments, route writes natively
@@ -104,6 +106,7 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
   const [editFields, setEditFields] = useState({}); // temp edit values
   const [savingEdit, setSavingEdit] = useState(false);
   const [sortBy, setSortBy] = useState('newest');
+  const [campaignFilter, setCampaignFilter] = useState('all');
   const [selectedCards, setSelectedCards] = useState(new Map()); // Map<cardKey, 'flex'|'single'>
   const [bulkMarking, setBulkMarking] = useState(false);
   const [bulkEditing, setBulkEditing] = useState(false);
@@ -1206,60 +1209,74 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
 
     return (
       <div key={dep.id} className="border border-ed-line rounded-xl bg-white overflow-hidden">
-        {/* Always-visible header: Ad Name, Campaign, Ad Set */}
-        <div className="px-5 py-4 space-y-3">
-          {/* Ad Name + Format badge */}
+        {/* Always-visible header */}
+        <div className="px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             {!isPoster && (
-              <label className="flex-shrink-0 mt-1 cursor-pointer" onClick={e => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selectedCards.has(dep.id)}
-                  onChange={() => toggleCardSelection(dep.id, 'single')}
-                  className="rounded border-ed-accent/30 text-ed-accent focus:ring-ed-accent/20 w-4 h-4"
-                />
+              <label className="flex-shrink-0 mt-0.5 cursor-pointer" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={selectedCards.has(dep.id)} onChange={() => toggleCardSelection(dep.id, 'single')} className="rounded border-ed-accent/30 text-ed-accent focus:ring-ed-accent/20 w-4 h-4" />
               </label>
             )}
             <div className="flex-1 min-w-0">
-              <div className="text-[14px] leading-tight mb-1.5">
-                <span className="text-ed-ink2 font-medium">Ad Name: </span>
-                <span className="font-bold text-ed-ink">{name}</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-block px-2 py-0.5 rounded bg-ed-accent/10 text-ed-accent text-[9px] font-bold uppercase tracking-wider">Ad Format: Single Image</span>
-              </div>
+              <h3 className="text-[15px] font-serif text-ed-ink leading-tight">{name}</h3>
+              <p className="text-[11px] text-ed-ink3 mt-0.5">
+                {campaignName || 'No campaign'} · created {dep.created_at ? new Date(dep.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'} · page: {dep.facebook_page || '—'}
+              </p>
             </div>
-            {thumbUrl && (
-              <img src={thumbUrl} alt="" className="w-14 h-14 object-cover rounded-xl bg-ed-bg flex-shrink-0" loading="lazy" />
-            )}
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <div className="flex items-center gap-3 text-center">
+                <div><span className="text-[13px] font-mono text-ed-ink font-medium">{parseCount(dep.ad_headlines)}</span><div className="text-[8px] uppercase tracking-wider text-ed-ink3 font-medium">HEADLINES</div></div>
+                <div><span className="text-[13px] font-mono text-ed-ink font-medium">{parseCount(dep.primary_texts)}</span><div className="text-[8px] uppercase tracking-wider text-ed-ink3 font-medium">BODY</div></div>
+              </div>
+              {!isPoster && (
+                <>
+                  <button onClick={() => toggleCardExpanded(dep.id)} className="text-[11px] text-ed-ink2 hover:text-ed-accent transition-colors">Edit</button>
+                  <button onClick={() => handleSendBack(dep.id, 'single')} disabled={isSendingBack} className="text-[11px] text-ed-ink2 hover:text-ed-accent transition-colors disabled:opacity-50">Send back</button>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Campaign + Ad Set + Duplicate Ad Set — always visible */}
-          <PostInSection campaignName={campaignName} adSetName={adSetName} duplicateAdSetName={dep.duplicate_adset_name} adName={name} cardKey={dep.id} />
+          {/* Thumbnail */}
+          {thumbUrl && (
+            <div className="mt-3">
+              <ThumbnailRow
+                images={[{ url: thumbUrl, aspectRatio: dep.ad?.aspect_ratio, label: dep.ad?.image_model }]}
+                maxVisible={1}
+              />
+            </div>
+          )}
 
-          {/* Admin Edit Panel — always visible when editing (not inside collapsible) */}
-          <EditPanel cardKey={dep.id} id={dep.id} isFlex={false} />
-
-          {/* Expand/Collapse toggle */}
-          <button
-            onClick={() => toggleCardExpanded(dep.id)}
-            className="flex items-center justify-center w-full gap-1 text-[12px] font-medium text-ed-accent hover:text-ed-accent/80 bg-ed-accent/5 hover:bg-ed-accent/10 py-1.5 rounded-md cursor-pointer transition-all mt-2"
-          >
-            <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            {isExpanded ? 'Hide Ad Details' : 'Show Ad Details'}
-            {!isExpanded && (
-              <span className="text-[10px] text-ed-accent/70 font-normal">
-                ({[thumbUrl && 'Image', dep.primary_texts && parseCount(dep.primary_texts) > 0 && 'Primary Text', dep.ad_headlines && parseCount(dep.ad_headlines) > 0 && 'Headline', 'Notes'].filter(Boolean).join(', ')})
-              </span>
-            )}
-          </button>
+          {/* QA Readiness Strip */}
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-ed-line">
+            {(() => {
+              const hasPage = !!dep.facebook_page;
+              const hasUrl = !!dep.destination_url;
+              const headlineCount = parseCount(dep.ad_headlines);
+              const primaryCount = parseCount(dep.primary_texts);
+              const hasImage = !!thumbUrl;
+              return (
+                <>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${hasPage ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{hasPage ? '✓' : '!'} Page set</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${hasUrl ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{hasUrl ? '✓' : '!'} URL valid</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${headlineCount > 0 ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{headlineCount > 0 ? '✓' : '!'} Headlines ({headlineCount})</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${primaryCount > 0 ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{primaryCount > 0 ? '✓' : '!'} Primary text ({primaryCount})</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${hasImage ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{hasImage ? '✓' : '!'} Has image</span>
+                </>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Collapsible details */}
         {isExpanded && (
           <div className="px-5 pb-5 space-y-4 border-t border-ed-line pt-4">
+            {/* Campaign + Ad Set */}
+            <PostInSection campaignName={campaignName} adSetName={adSetName} duplicateAdSetName={dep.duplicate_adset_name} adName={name} cardKey={dep.id} />
+
+            {/* Admin Edit Panel */}
+            <EditPanel cardKey={dep.id} id={dep.id} isFlex={false} />
+
             {/* Image */}
             {thumbUrl && (
               <div className="border border-ed-line rounded-xl p-4 bg-ed-surface">
@@ -1370,70 +1387,73 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
         ref={flexAd.id === highlightedId ? highlightRef : undefined}
         className={`border rounded-xl bg-white overflow-hidden transition-all duration-700 ${flexAd.id === highlightedId ? 'border-ed-accent ring-2 ring-ed-accent/30' : 'border-ed-line'}`}
       >
-        {/* Always-visible header: Ad Name, Campaign, Ad Set */}
-        <div className="px-5 py-4 space-y-3">
-          {/* Ad Name + Format badge + small thumbnails */}
+        {/* Always-visible header */}
+        <div className="px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             {!isPoster && (
-              <label className="flex-shrink-0 mt-1 cursor-pointer" onClick={e => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selectedCards.has(flexId)}
-                  onChange={() => toggleCardSelection(flexId, 'flex')}
-                  className="rounded border-ed-accent/30 text-ed-accent focus:ring-ed-accent/20 w-4 h-4"
-                />
+              <label className="flex-shrink-0 mt-0.5 cursor-pointer" onClick={e => e.stopPropagation()}>
+                <input type="checkbox" checked={selectedCards.has(flexId)} onChange={() => toggleCardSelection(flexId, 'flex')} className="rounded border-ed-accent/30 text-ed-accent focus:ring-ed-accent/20 w-4 h-4" />
               </label>
             )}
             <div className="flex-1 min-w-0">
-              <div className="text-[14px] leading-tight mb-1.5">
-                <span className="text-ed-ink2 font-medium">Ad Set: </span>
-                <span className="font-bold text-ed-ink">{flexAd.name || 'Ad Set'}</span>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-ed-accent/10 text-ed-accent text-[9px] font-bold uppercase tracking-wider">
-                  Ad Set: Multiple Ads
-                  <InfoTooltip text="This card groups several ads that will be posted under the same campaign and Meta ad set." position="right" />
-                </span>
-              </div>
+              <h3 className="text-[15px] font-serif text-ed-ink leading-tight">{flexAd.name || 'Ad Set'}</h3>
+              <p className="text-[11px] text-ed-ink3 mt-0.5">
+                {campaignName || 'No campaign'} · created {flexAd.created_at ? new Date(flexAd.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'} · {childDeps.length} ad{childDeps.length !== 1 ? 's' : ''} · page: {flexAd.facebook_page || '—'}
+              </p>
             </div>
-            <div className="flex gap-1 flex-shrink-0">
-              {childDeps.slice(0, 3).map(d => d.imageUrl ? (
-                <img key={d.id} src={d.imageUrl} alt="" className="w-10 h-10 object-cover rounded-lg bg-ed-bg" loading="lazy" />
-              ) : (
-                <div key={d.id} className="w-10 h-10 rounded-lg bg-ed-line" />
-              ))}
-              {childDeps.length > 3 && (
-                <div className="w-10 h-10 rounded-lg bg-ed-bg flex items-center justify-center text-[10px] text-ed-ink3 font-medium">+{childDeps.length - 3}</div>
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <div className="flex items-center gap-3 text-center">
+                <div><span className="text-[13px] font-mono text-ed-ink font-medium">{childDeps.length}</span><div className="text-[8px] uppercase tracking-wider text-ed-ink3 font-medium">ADS</div></div>
+                <div><span className="text-[13px] font-mono text-ed-ink font-medium">{parseCount(flexAd.headlines)}</span><div className="text-[8px] uppercase tracking-wider text-ed-ink3 font-medium">HEADLINES</div></div>
+                <div><span className="text-[13px] font-mono text-ed-ink font-medium">{parseCount(flexAd.primary_texts)}</span><div className="text-[8px] uppercase tracking-wider text-ed-ink3 font-medium">BODY</div></div>
+              </div>
+              {!isPoster && (
+                <>
+                  <button onClick={() => toggleCardExpanded(flexId)} className="text-[11px] text-ed-ink2 hover:text-ed-accent transition-colors">Edit</button>
+                  <button onClick={() => handleSendBackFlex(flexAd)} disabled={isSendingBack} className="text-[11px] text-ed-ink2 hover:text-ed-accent transition-colors disabled:opacity-50">Send back</button>
+                </>
               )}
             </div>
           </div>
 
-          {/* Campaign + Ad Set + Duplicate Ad Set — always visible */}
-          <PostInSection campaignName={campaignName} adSetName={adSetName} duplicateAdSetName={flexAd.duplicate_adset_name} adName={flexAd.name || 'Ad Set'} cardKey={flexId} />
+          {/* Thumbnail Row */}
+          <div className="mt-3">
+            <ThumbnailRow
+              images={childDeps.map(d => ({ url: d.imageUrl, aspectRatio: d.ad?.aspect_ratio, label: d.ad?.image_model }))}
+              maxVisible={6}
+            />
+          </div>
 
-          {/* Admin Edit Panel — always visible when editing (not inside collapsible) */}
-          <EditPanel cardKey={flexId} id={flexAd.id} isFlex />
-
-          {/* Expand/Collapse toggle */}
-          <button
-            onClick={() => toggleCardExpanded(flexId)}
-            className="flex items-center justify-center w-full gap-1 text-[12px] font-medium text-ed-accent hover:text-ed-accent/80 bg-ed-accent/5 hover:bg-ed-accent/10 py-1.5 rounded-md cursor-pointer transition-all mt-2"
-          >
-            <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-            {isExpanded ? 'Hide Ad Details' : 'Show Ad Details'}
-            {!isExpanded && (
-              <span className="text-[10px] text-ed-accent/70 font-normal">
-                ({[depsWithImages.length > 0 && `${depsWithImages.length} Images`, flexAd.primary_texts && parseCount(flexAd.primary_texts) > 0 && 'Primary Text', flexAd.headlines && parseCount(flexAd.headlines) > 0 && 'Headline', 'Notes'].filter(Boolean).join(', ')})
-              </span>
-            )}
-          </button>
+          {/* QA Readiness Strip */}
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-ed-line">
+            {(() => {
+              const hasPage = !!flexAd.facebook_page;
+              const hasUrl = !!flexAd.destination_url;
+              const headlineCount = parseCount(flexAd.headlines);
+              const primaryCount = parseCount(flexAd.primary_texts);
+              const allHaveImage = childDeps.every(d => d.imageUrl);
+              return (
+                <>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${hasPage ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{hasPage ? '✓' : '!'} Page set</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${hasUrl ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{hasUrl ? '✓' : '!'} URL valid</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${headlineCount > 0 ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{headlineCount > 0 ? '✓' : '!'} Headlines ({headlineCount})</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${primaryCount > 0 ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{primaryCount > 0 ? '✓' : '!'} Primary text ({primaryCount})</span>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${allHaveImage ? 'bg-ed-green/10 text-ed-green' : 'bg-ed-rust/10 text-ed-rust'}`}>{allHaveImage ? '✓' : '!'} All ads have image</span>
+                </>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Collapsible details */}
         {isExpanded && (
           <div className="px-5 pb-5 space-y-4 border-t border-ed-line pt-4">
+            {/* Campaign + Ad Set + Duplicate Ad Set */}
+            <PostInSection campaignName={campaignName} adSetName={adSetName} duplicateAdSetName={flexAd.duplicate_adset_name} adName={flexAd.name || 'Ad Set'} cardKey={flexId} />
+
+            {/* Admin Edit Panel */}
+            <EditPanel cardKey={flexId} id={flexAd.id} isFlex />
+
             {/* Ad Creatives with download */}
             <div className="border border-ed-line rounded-xl p-4 bg-ed-surface">
               <div className="mb-1">
@@ -1680,30 +1700,47 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
   }
 
   const cardList = buildCardList();
+  const filteredCardList = campaignFilter === 'all' ? cardList : cardList.filter(c => (c.campaignName || 'Uncategorized') === campaignFilter);
 
   return (
     <div className="space-y-5">
-      {/* Summary + Sort */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-[14px]">
-            <span className="font-bold text-ed-ink">{cardList.length}</span>
-            <span className="text-ed-ink2 ml-1.5">ad{cardList.length !== 1 ? 's' : ''} ready to post</span>
-          </div>
-          <p className="text-[11px] text-ed-ink2 mt-0.5">These ads are ready to be posted in Meta Ads Manager. Expand each card to see the full details and copy the content.</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value)}
-            className="text-[12px] text-ed-ink bg-ed-bg border border-ed-line rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ed-accent/20 cursor-pointer"
-          >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="campaign">Campaign → Ad Set</option>
-            <option value="name">Name (A-Z)</option>
-          </select>
-        </div>
+      {/* Campaign filter tabs */}
+      {(() => {
+        const campaignCounts = {};
+        let totalCount = 0;
+        cardList.forEach(card => {
+          totalCount++;
+          const camp = card.campaignName || 'Uncategorized';
+          campaignCounts[camp] = (campaignCounts[camp] || 0) + 1;
+        });
+        const tabs = [
+          { label: 'All', count: totalCount, value: 'all' },
+          ...Object.entries(campaignCounts).map(([name, count]) => ({
+            label: name,
+            count,
+            value: name,
+          })),
+        ];
+        return tabs.length > 2 ? (
+          <FilterTabs tabs={tabs} activeValue={campaignFilter} onChange={setCampaignFilter} />
+        ) : null;
+      })()}
+
+      {/* Sort info */}
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-ed-ink3">
+          Sorted by {sortBy === 'oldest' ? 'oldest in queue' : sortBy === 'newest' ? 'newest first' : sortBy === 'campaign' ? 'campaign' : 'name'} · {cardList.length} ad set{cardList.length !== 1 ? 's' : ''} · {readyDeps.length} ad{readyDeps.length !== 1 ? 's' : ''}
+        </span>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value)}
+          className="text-[12px] text-ed-ink bg-ed-bg border border-ed-line rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ed-accent/20 cursor-pointer"
+        >
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="campaign">Campaign → Ad Set</option>
+          <option value="name">Name (A-Z)</option>
+        </select>
       </div>
 
       {/* Bulk actions toolbar — visible when cards are selected or for select all */}
@@ -1807,7 +1844,7 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
 
       {/* Cards */}
       <div className="space-y-5">
-        {cardList.map(card => card.type === 'single' ? renderAdCard(card.dep) : renderFlexCard(card.flexAd))}
+        {filteredCardList.map(card => card.type === 'single' ? renderAdCard(card.dep) : renderFlexCard(card.flexAd))}
       </div>
 
       <ConfirmDialog

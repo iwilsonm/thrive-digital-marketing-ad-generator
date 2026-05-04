@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api';
-// Phase 6.10 — Combine into Ad Set modal (replaces the legacy auto-name "Flexible Ad" combine flow)
 import CombineIntoAdSetModal from './CombineIntoAdSetModal';
 import InfoTooltip from './InfoTooltip';
+import timeAgo from '../utils/timeAgo';
 
 const CTA_OPTIONS = [
   'SHOP_NOW', 'LEARN_MORE', 'SIGN_UP', 'BOOK_NOW', 'CONTACT_US',
@@ -1249,6 +1249,9 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
     const isSelectedStaging = inStaging && selectedInStaging.has(dep.id);
     const isSelected = inStaging ? isSelectedStaging : isSelectedUnplanned;
     const placement = inStaging ? resolvePlacement(dep) : null;
+    const aspect = dep.ad?.aspect_ratio || '';
+    const model = dep.ad?.image_model || '';
+    const modelShort = model.includes('gemini') ? (model.includes('flash') ? 'Flash' : 'Pro') : model.includes('gpt') ? 'GPT' : model ? model.slice(0, 4) : '';
 
     return (
       <div
@@ -1264,39 +1267,52 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
         } ${
           isDragging ? 'opacity-40 border-ed-accent/30 bg-ed-accent/5' :
           isSelected ? 'border-ed-accent/40 bg-[rgba(168,84,59,0.06)]' :
+          inStaging ? 'border-transparent bg-transparent hover:bg-ed-bg/60' :
           'border-ed-line bg-ed-surface hover:border-ed-accent/20'
         }`}
       >
-        {/* Checkbox */}
-        <button
-          onMouseDown={(e) => e.stopPropagation()}
-          onDragStart={(e) => e.preventDefault()}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (inStaging) {
-              toggleStagingSelect(dep.id);
-            } else {
+        {/* Status dot (queue) / Checkbox (staging) */}
+        {inStaging ? (
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onDragStart={(e) => e.preventDefault()}
+            onClick={(e) => { e.stopPropagation(); toggleStagingSelect(dep.id); }}
+            className={`w-[14px] h-[14px] rounded flex-shrink-0 flex items-center justify-center transition-colors ${
+              isSelected ? 'bg-ed-accent border-ed-accent' : 'border-[1.5px] border-ed-ink3/60 hover:border-ed-accent/40'
+            }`}
+          >
+            {isSelected && (
+              <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+        ) : (
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onDragStart={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
               setSelectedUnplanned(prev => {
                 const next = new Set(prev);
                 if (next.has(dep.id)) next.delete(dep.id); else next.add(dep.id);
                 return next;
               });
-            }
-          }}
-          className={`w-[14px] h-[14px] rounded flex-shrink-0 flex items-center justify-center transition-colors ${
-            isSelected ? 'bg-ed-accent border-ed-accent' : 'border-[1.5px] border-ed-ink3/60 hover:border-ed-accent/40'
-          }`}
-        >
-          {isSelected && (
-            <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-            </svg>
-          )}
-        </button>
+            }}
+            className="flex-shrink-0"
+          >
+            <span className={`block w-2.5 h-2.5 rounded-full transition-colors ${
+              isSelected ? 'bg-ed-accent ring-2 ring-ed-accent/30' : 'bg-ed-green/60'
+            }`} />
+          </button>
+        )}
 
         <div className="min-w-0 flex-1">
-          <div className="text-[12px] font-medium text-ed-ink truncate" title={name}>{name}</div>
-          {dep.ad?.body_copy && (
+          <div className={`text-[12px] text-ed-ink truncate ${inStaging ? 'font-medium' : 'font-serif'}`} title={name}>{name}</div>
+          {!inStaging && dep.created_at && (
+            <div className="text-[10px] text-ed-ink3 mt-0.5">{timeAgo(dep.created_at)}</div>
+          )}
+          {inStaging && dep.ad?.body_copy && (
             <div className="text-[10px] text-ed-ink3 truncate mt-0.5">{dep.ad.body_copy}</div>
           )}
           {placement && (
@@ -1304,31 +1320,14 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
               {placement.campaignName}{placement.adSetName ? ` \u203A ${placement.adSetName}` : ''}
             </div>
           )}
-          {dep.created_at && (
-            <div className="text-[9px] text-ed-ink3 mt-0.5">
-              Added {(() => {
-                try {
-                  const d = new Date(dep.created_at);
-                  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                } catch { return ''; }
-              })()}
-            </div>
-          )}
         </div>
-        {thumbUrl ? (
-          <img
-            src={thumbUrl}
-            alt=""
-            draggable="false"
-            className="w-10 h-10 object-cover rounded-lg bg-ed-bg flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-ed-accent/30 transition-all"
-            loading="lazy"
-            onClick={(e) => { e.stopPropagation(); setPreviewImage(thumbUrl); }}
-            title="Click to preview"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-lg bg-ed-bg flex-shrink-0" />
+
+        {inStaging && (
+          <>
+            {aspect && <span className="text-[9px] font-mono-ed text-ed-ink3 bg-black/5 px-1.5 py-0.5 rounded flex-shrink-0">{aspect}</span>}
+            {modelShort && <span className="text-[9px] font-mono-ed text-ed-ink3 bg-black/5 px-1.5 py-0.5 rounded flex-shrink-0">{modelShort}</span>}
+          </>
         )}
-        <span className="text-[8px] font-bold text-ed-accent bg-ed-accent/10 px-1 py-0.5 rounded tracking-wide flex-shrink-0">Single Image</span>
 
         {/* Action buttons on hover */}
         <div className="opacity-100 md:opacity-0 md:group-hover:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity">
@@ -1413,40 +1412,25 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
           </button>
 
           <div className="min-w-0 flex-1">
-            <div className="text-[12px] font-serif font-medium text-ed-ink truncate">{flexAd.name}</div>
-            <div className="text-[10px] font-mono-ed text-ed-ink3">{childDeps.length} ad{childDeps.length !== 1 ? 's' : ''}</div>
-            {placement && (
-              <div className="text-[9px] text-ed-accent truncate">
-                {placement.campaignName}{placement.adSetName ? ` \u203A ${placement.adSetName}` : ''}
-              </div>
-            )}
-            {(flexAd.lp_primary_url || flexAd.lp_secondary_url) && (
-              <div className="flex items-center gap-2 text-[9px]">
-                {flexAd.lp_primary_url && (
-                  <a href={flexAd.lp_primary_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-ed-green hover:text-ed-green/80 underline underline-offset-2">LP1</a>
-                )}
-                {flexAd.lp_secondary_url && (
-                  <a href={flexAd.lp_secondary_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-ed-green hover:text-ed-green/80 underline underline-offset-2">LP2</a>
-                )}
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-ed-ink3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              <span className="text-[12px] font-serif font-medium text-ed-ink truncate">{flexAd.name}</span>
+            </div>
+            <div className="text-[10px] text-ed-ink3 mt-0.5">
+              {childDeps.length} ad{childDeps.length !== 1 ? 's' : ''}
+              {placement ? <> · <span className="text-ed-ink2">campaign: {placement.campaignName}</span></> : ''}
+            </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
-            {childDeps.slice(0, 3).map(d => (
-              d.imageUrl ? (
-                <img key={d.id} src={d.imageUrl} alt="" className="w-9 h-9 object-cover rounded-lg bg-ed-bg cursor-zoom-in hover:ring-2 hover:ring-ed-accent/30 transition-all" loading="lazy" onClick={(e) => { e.stopPropagation(); setPreviewImage(d.imageUrl); }} title="Click to preview" />
-              ) : (
-                <div key={d.id} className="w-9 h-9 rounded-lg bg-ed-line" />
-              )
-            ))}
-            {childDeps.length > 3 && (
-              <div className="w-9 h-9 rounded-lg bg-ed-line flex items-center justify-center text-[10px] font-mono-ed text-ed-ink3">
-                +{childDeps.length - 3}
-              </div>
-            )}
-          </div>
-          <span className="text-[9px] font-bold text-ed-accent bg-ed-accent/10 px-1.5 py-0.5 rounded tracking-wide flex-shrink-0">Ad Set</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleMarkReadyToPost([flexAd.id]); }}
+            className="text-[10px] text-ed-ink2 hover:text-ed-accent transition-colors flex-shrink-0"
+          >
+            Send to Ready
+          </button>
 
           {/* Hover actions / Confirmation */}
           {flexActionConfirm?.id === flexAd.id ? (
@@ -1537,30 +1521,16 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
                       key={d.id}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); openSidebar({ type: 'single', deployment: d, ad: d.ad }); }}
-                      className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-ed-line bg-ed-surface hover:border-ed-accent/20 transition-all text-left"
+                      className="w-full flex items-center gap-2.5 py-1.5 px-1 rounded-lg hover:bg-ed-bg/60 transition-all text-left"
                     >
-                      {d.imageUrl ? (
-                        <img
-                          src={d.imageUrl}
-                          alt=""
-                          className="w-11 h-11 object-cover rounded-lg bg-ed-bg flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-ed-accent/30 transition-all"
-                          loading="lazy"
-                          onClick={(e) => { e.stopPropagation(); setPreviewImage(d.imageUrl); }}
-                          title="Click to preview"
-                        />
-                      ) : (
-                        <div className="w-11 h-11 rounded-lg bg-ed-bg flex-shrink-0" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[12px] font-medium text-ed-ink truncate">{adName}</div>
-                        {d.ad?.body_copy && (
-                          <div className="text-[10px] text-ed-ink3 truncate mt-0.5">{d.ad.body_copy}</div>
-                        )}
-                        {addedAt && (
-                          <div className="text-[9px] text-ed-ink3 mt-0.5">Added {addedAt}</div>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-ed-accent font-medium flex-shrink-0">Details</span>
+                      <span className="block w-2 h-2 rounded-full bg-ed-green/60 flex-shrink-0" />
+                      <span className="text-[12px] text-ed-ink truncate flex-1">{adName}</span>
+                      {d.ad?.aspect_ratio && <span className="text-[9px] font-mono-ed text-ed-ink3 bg-black/5 px-1.5 py-0.5 rounded flex-shrink-0">{d.ad.aspect_ratio}</span>}
+                      {(() => {
+                        const m = d.ad?.image_model || '';
+                        const ms = m.includes('gemini') ? (m.includes('flash') ? 'Flash' : 'Pro') : m.includes('gpt') ? 'GPT' : m ? m.slice(0, 4) : '';
+                        return ms ? <span className="text-[9px] font-mono-ed text-ed-ink3 bg-black/5 px-1.5 py-0.5 rounded flex-shrink-0">{ms}</span> : null;
+                      })()}
                     </button>
                   );
                 })}
@@ -2324,34 +2294,22 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
           <div className="mb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {unplannedDeps.length > 0 && (
-                  <button
-                    onClick={toggleSelectAllUnplanned}
-                    className={`w-[14px] h-[14px] rounded flex-shrink-0 flex items-center justify-center transition-colors ${
-                      selectedUnplanned.size === unplannedDeps.length && unplannedDeps.length > 0
-                        ? 'bg-ed-accent border-ed-accent'
-                        : selectedUnplanned.size > 0
-                          ? 'bg-ed-accent/50'
-                          : 'border-[1.5px] border-ed-ink3/60 hover:border-ed-accent/40'
-                    }`}
-                  >
-                    {selectedUnplanned.size > 0 && (
-                      <svg className="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d={
-                          selectedUnplanned.size === unplannedDeps.length ? "M5 13l4 4L19 7" : "M5 12h14"
-                        } />
-                      </svg>
-                    )}
-                  </button>
-                )}
                 <h3 className="text-[13px] font-serif text-ed-ink">Queue</h3>
                 <span className="text-[11px] font-mono-ed text-ed-ink3 bg-black/5 px-2 py-0.5 rounded-full">
-                  {unplannedDeps.length}
+                  {unplannedDeps.length} ad{unplannedDeps.length !== 1 ? 's' : ''}
                 </span>
               </div>
+              {unplannedDeps.length > 0 && (
+                <button
+                  onClick={toggleSelectAllUnplanned}
+                  className="text-[11px] text-ed-accent hover:text-ed-accent/80 transition-colors"
+                >
+                  {selectedUnplanned.size === unplannedDeps.length ? 'Deselect all' : 'Select all'}
+                </button>
+              )}
             </div>
             <p className="text-[10px] text-ed-ink2 mt-1 leading-relaxed">
-              Newly deployed ads land here. Move them into Planner when you are ready to organize them.
+              Newly generated ads land here. Move them to the Planner to organize them into ad sets.
             </p>
           </div>
 
@@ -2409,11 +2367,13 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div>
-                <h3 className="text-[14px] font-serif text-ed-ink flex items-center gap-1">
-                  Planner
-                  <InfoTooltip text="Planner is the holding area for ads you are organizing. Select multiple ads here to create an ad set, then move the ad set to Ready to Post." position="right" />
-                </h3>
-                <p className="text-[11px] text-ed-ink2 mt-0.5">Drag ads here to plan them, assign a campaign, or combine them into an ad set.</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[14px] font-serif text-ed-ink">Planner</h3>
+                  <span className="text-[11px] font-mono-ed text-ed-ink3">
+                    {plannerItemCount} item{plannerItemCount !== 1 ? 's' : ''} · {stagingFlexAds.length} ad set{stagingFlexAds.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <p className="text-[11px] text-ed-ink2 mt-0.5">Group ads into ad sets, then send the ad set to Ready to Post when it's organized.</p>
               </div>
               {undoState && (
                 <button
@@ -2428,9 +2388,35 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
                 </button>
               )}
             </div>
-            <span className="text-[11px] font-mono-ed text-ed-ink3 bg-black/5 px-2 py-0.5 rounded-full">
-              {plannerItemCount} item{plannerItemCount !== 1 ? 's' : ''}
-            </span>
+            <div className="flex items-center gap-2">
+              {selectedInStaging.size >= 2 && (
+                <button
+                  onClick={() => {
+                    const selected = [...selectedInStaging];
+                    const standaloneDepIds = selected.filter((id) => deployments.some((d) => d.id === id));
+                    const selectedFlexIds = selected.filter((id) => flexAds.some((f) => f.id === id));
+                    const resolvedChildIds = [];
+                    for (const fid of selectedFlexIds) {
+                      const flex = flexAds.find((f) => f.id === fid);
+                      if (flex) {
+                        try { resolvedChildIds.push(...JSON.parse(flex.child_deployment_ids || '[]')); } catch { /* ignore */ }
+                      }
+                    }
+                    const allDepIds = [...new Set([...standaloneDepIds, ...resolvedChildIds])];
+                    if (allDepIds.length < 1) { addToast('No deployments selected', 'info'); return; }
+                    setCombineModalDeploymentIds(allDepIds);
+                    setCombineModalOpen(true);
+                  }}
+                  disabled={combiningFlex}
+                  className="px-3 py-1 text-[11px] rounded-full bg-ed-accent/5 hover:bg-ed-accent/10 text-ed-accent font-medium transition-colors inline-flex items-center gap-1 disabled:opacity-50"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z" />
+                  </svg>
+                  Group selected
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Staging toolbar — when items selected */}
@@ -2456,40 +2442,6 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
                 )}
               </button>
               <span className="text-ed-accent font-medium">{selectedInStaging.size} selected</span>
-              {selectedInStaging.size >= 2 && (
-                <button
-                  onClick={() => {
-                    // Phase 6.10 — open Combine into Ad Set modal instead of
-                    // the legacy auto-name combine. Resolves
-                    // selected items to deployment IDs (handling both standalone
-                    // deployments AND already-grouped flex/ad-set children).
-                    const selected = [...selectedInStaging];
-                    const standaloneDepIds = selected.filter((id) => deployments.some((d) => d.id === id));
-                    const selectedFlexIds = selected.filter((id) => flexAds.some((f) => f.id === id));
-                    const resolvedChildIds = [];
-                    for (const fid of selectedFlexIds) {
-                      const flex = flexAds.find((f) => f.id === fid);
-                      if (flex) {
-                        try { resolvedChildIds.push(...JSON.parse(flex.child_deployment_ids || '[]')); } catch { /* ignore */ }
-                      }
-                    }
-                    const allDepIds = [...new Set([...standaloneDepIds, ...resolvedChildIds])];
-                    if (allDepIds.length < 1) {
-                      addToast('No deployments selected', 'info');
-                      return;
-                    }
-                    setCombineModalDeploymentIds(allDepIds);
-                    setCombineModalOpen(true);
-                  }}
-                  disabled={combiningFlex}
-                  className="px-2 py-1 rounded-[7px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors inline-flex items-center gap-1 disabled:opacity-50"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z" />
-                  </svg>
-                  Create Ad Set
-                </button>
-              )}
               <button
                 onClick={() => handleMarkReadyToPost([...selectedInStaging])}
                 className="px-2 py-1 rounded-lg bg-ed-green/10 border border-ed-green/30 text-ed-green font-medium hover:bg-ed-green/20 transition-colors inline-flex items-center gap-1"
@@ -2536,10 +2488,26 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
             </div>
           ) : (
             <div className="space-y-1.5">
-              {/* Ad sets first */}
               {stagingFlexAds.map(flexAd => renderFlexAdCard(flexAd))}
-              {/* Standalone deployments */}
-              {standaloneStagingDeps.map(dep => renderDepCard(dep, { isDraggable: true, inStaging: true }))}
+              {standaloneStagingDeps.length > 0 && (
+                <>
+                  <div className="pt-3 pb-1">
+                    <span className="text-[9px] font-medium tracking-[0.14em] text-ed-ink3 uppercase">
+                      Ungrouped · select and group into an ad set
+                    </span>
+                  </div>
+                  {standaloneStagingDeps.map(dep => renderDepCard(dep, { isDraggable: true, inStaging: true }))}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Footer: selected count */}
+          {(selectedInStaging.size > 0 || selectedUnplanned.size > 0) && (
+            <div className="mt-3 pt-3 border-t border-ed-line text-center">
+              <span className="text-[11px] text-ed-ink3">
+                {selectedInStaging.size + selectedUnplanned.size} selected
+              </span>
             </div>
           )}
         </div>
