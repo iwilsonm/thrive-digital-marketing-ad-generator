@@ -82,6 +82,62 @@ function isModelNotFoundError(err) {
   return false;
 }
 
+const ANTHROPIC_BILLING_MESSAGE = 'Anthropic request blocked — your account shows insufficient credit balance or a billing issue. Check your plan and credits at https://console.anthropic.com/settings/billing.';
+const ANTHROPIC_RATE_LIMIT_MESSAGE = 'Anthropic rate limit reached. Please wait a moment and try again.';
+
+function collectProviderErrorMessages(value, seen = new Set()) {
+  if (!value || seen.has(value)) return [];
+
+  if (typeof value === 'string') return [value];
+  if (value instanceof Error) {
+    seen.add(value);
+    return [
+      value.message,
+      ...collectProviderErrorMessages(value.error, seen),
+      ...collectProviderErrorMessages(value.response, seen),
+      ...collectProviderErrorMessages(value.cause, seen),
+    ].filter(Boolean);
+  }
+  if (typeof value !== 'object') return [];
+
+  seen.add(value);
+  const messages = [];
+  if (typeof value.message === 'string') messages.push(value.message);
+  if (value.error) messages.push(...collectProviderErrorMessages(value.error, seen));
+  if (value.response) messages.push(...collectProviderErrorMessages(value.response, seen));
+  if (value.cause) messages.push(...collectProviderErrorMessages(value.cause, seen));
+  if (Array.isArray(value.details)) messages.push(...value.details.flatMap(detail => collectProviderErrorMessages(detail, seen)));
+  return messages;
+}
+
+function getProviderErrorText(err) {
+  return collectProviderErrorMessages(err).join(' ');
+}
+
+function isAnthropicBillingError(err, providerErrorText = getProviderErrorText(err)) {
+  const text = providerErrorText.toLowerCase();
+  return text.includes('credit balance is too low')
+    || text.includes('billing')
+    || text.includes('organization has been disabled');
+}
+
+function isAnthropicRateLimitError(err, providerErrorText = getProviderErrorText(err)) {
+  const status = err?.status || err?.statusCode || err?.httpCode || err?.response?.status;
+  const type = err?.error?.type || err?.type;
+  return status === 429
+    || status === 400 && isAnthropicBillingError(err, providerErrorText)
+    || type === 'rate_limit_error'
+    || /rate.?limit|too many requests|quota|credit balance is too low|billing|organization has been disabled/i.test(providerErrorText);
+}
+
+function toAnthropicUserFacingError(err) {
+  const providerErrorText = getProviderErrorText(err);
+  if (!isAnthropicRateLimitError(err, providerErrorText)) return err;
+  return new Error(isAnthropicBillingError(err, providerErrorText)
+    ? ANTHROPIC_BILLING_MESSAGE
+    : ANTHROPIC_RATE_LIMIT_MESSAGE);
+}
+
 const ANTHROPIC_FALLBACK_CHAIN = {
   'claude-sonnet-4-6': 'claude-sonnet-4-5',  // PEF plan 2026-04-21 — graceful fallback if 4.6 deprecated mid-deploy
 };
@@ -198,9 +254,13 @@ export async function chat(messages, model = 'claude-sonnet-4-6', options = {}) 
         } catch { /* swallow */ }
       }
       activeModel = fallbackModel;
-      response = await callWithModel(activeModel);
+      try {
+        response = await callWithModel(activeModel);
+      } catch (fallbackErr) {
+        throw toAnthropicUserFacingError(fallbackErr);
+      }
     } else {
-      throw err;
+      throw toAnthropicUserFacingError(err);
     }
   }
 
@@ -287,18 +347,22 @@ export async function chatWithImage(messages, text, base64Image, mimeType, model
     createParams.system = systemPrompt;
   }
 
-  const response = await withRetry(
-    () => anthropic.messages.create(createParams),
-    { label: '[Anthropic chatWithImage]' }
-  );
+  try {
+    const response = await withRetry(
+      () => anthropic.messages.create(createParams),
+      { label: '[Anthropic chatWithImage]' }
+    );
 
-  // Log cost from token usage (fire-and-forget)
-  logCostFromResponse(response, model, options);
+    // Log cost from token usage (fire-and-forget)
+    logCostFromResponse(response, model, options);
 
-  return response.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
-    .join('');
+    return response.content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('');
+  } catch (err) {
+    throw toAnthropicUserFacingError(err);
+  }
 }
 
 /**
@@ -381,32 +445,36 @@ export async function chatWithMultipleImages(messages, text, images, model = 'cl
 
   const timeoutMs = options.timeout || 120000;
 
-  const response = await withRetry(
-    () => {
-      const apiCall = anthropic.messages.create(createParams);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Anthropic API call timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs)
-      );
-      return Promise.race([apiCall, timeoutPromise]);
-    },
-    { label: '[Anthropic chatWithMultipleImages]', maxRetries: options.maxRetries ?? 3 }
-  );
+  try {
+    const response = await withRetry(
+      () => {
+        const apiCall = anthropic.messages.create(createParams);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Anthropic API call timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs)
+        );
+        return Promise.race([apiCall, timeoutPromise]);
+      },
+      { label: '[Anthropic chatWithMultipleImages]', maxRetries: options.maxRetries ?? 3 }
+    );
 
-  // Log cost from token usage (fire-and-forget)
-  logCostFromResponse(response, model, options);
+    // Log cost from token usage (fire-and-forget)
+    logCostFromResponse(response, model, options);
 
-  let responseText = response.content
-    .filter(block => block.type === 'text')
-    .map(block => block.text)
-    .join('');
+    let responseText = response.content
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('');
 
-  // For JSON mode, extract the JSON object from the response
-  if (wantJSON) {
-    const parsed = extractJSON(responseText);
-    if (parsed) {
-      responseText = JSON.stringify(parsed);
+    // For JSON mode, extract the JSON object from the response
+    if (wantJSON) {
+      const parsed = extractJSON(responseText);
+      if (parsed) {
+        responseText = JSON.stringify(parsed);
+      }
     }
-  }
 
-  return responseText;
+    return responseText;
+  } catch (err) {
+    throw toAnthropicUserFacingError(err);
+  }
 }

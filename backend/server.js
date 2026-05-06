@@ -171,7 +171,8 @@ try {
     legacyHeaders: false,
   });
   // Apply to generation-heavy routes
-  app.use('/api/projects/:id/generate-docs', llmRateLimit);
+  app.use('/api/projects/:id/generate-docs-manual', llmRateLimit);
+  app.use('/api/projects/:id/generate-doc/:type', llmRateLimit);
   app.use('/api/projects/:id/generate-ad', llmRateLimit);
   app.use('/api/upload/fetch-url', llmRateLimit);
   app.use('/api/deployments/generate-ad-copy', llmRateLimit);

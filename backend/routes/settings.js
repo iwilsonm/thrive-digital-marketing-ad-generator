@@ -4,7 +4,6 @@ import { requireAuth, requireRole } from '../auth.js';
 import { getSetting, setSetting, deleteSetting, getAllSettings, getDashboardTodos, replaceDashboardTodos } from '../convexClient.js';
 import { getDriveClient } from './drive.js';
 import { refreshGeminiRates } from '../services/costTracker.js';
-import { DEFAULT_OPENAI_IMAGE_MODEL, testOpenAIImageAccess } from '../services/openaiImageAccess.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
@@ -24,7 +23,6 @@ const ALLOWED_SETTING_KEYS = [
   'gemini_rate_1k',
   'gemini_rate_2k',
   'gemini_rate_4k',
-  'openai_image_rate_per_image',
   'cloudflare_account_id',
   'cloudflare_api_token',
   'cloudflare_pages_projects',
@@ -146,18 +144,6 @@ router.post('/test-openai', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: `Connection failed: ${err.message}` });
   }
-});
-
-// Test real GPT Image model access. This is intentionally separate from the
-// generic /models check because org verification and image-model availability
-// can fail even when a normal OpenAI key check succeeds.
-router.post('/test-openai-image', async (req, res) => {
-  const requestedModel = typeof req.body?.model === 'string' ? req.body.model.trim() : '';
-  const model = requestedModel || DEFAULT_OPENAI_IMAGE_MODEL;
-  const candidateKey = typeof req.body?.api_key === 'string' ? req.body.api_key.trim() : '';
-  const apiKey = candidateKey || await getSetting('openai_api_key');
-  const result = await testOpenAIImageAccess({ apiKey, model });
-  res.json(result);
 });
 
 // Phase 2 (PEF item G) — verify a specific OpenAI chat model is callable

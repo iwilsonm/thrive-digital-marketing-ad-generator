@@ -288,7 +288,6 @@ export const api = {
     request(`/projects/${projectId}/revert-correction`, { method: 'POST', body: JSON.stringify({ correction_id: correctionId }) }),
 
   // SSE streams — returns an abort controller, calls onEvent for each SSE message
-  generateDocs: (projectId, onEvent) => streamSSE(`/projects/${projectId}/generate-docs`, onEvent),
   regenerateDoc: (projectId, docType, onEvent) => streamSSE(`/projects/${projectId}/generate-doc/${docType}`, onEvent),
   generateDocsManual: (projectId, researchContent, onEvent) =>
     streamSSEWithBody(`/projects/${projectId}/generate-docs-manual`, { researchContent }, onEvent),
@@ -455,11 +454,6 @@ export const api = {
     request('/settings/test-openai', {
       method: 'POST',
       ...(apiKey ? { body: JSON.stringify({ api_key: apiKey }) } : {}),
-    }),
-  testOpenAIImage: (model = 'gpt-image-2', apiKey = '') =>
-    request('/settings/test-openai-image', {
-      method: 'POST',
-      body: JSON.stringify(apiKey ? { model, api_key: apiKey } : { model }),
     }),
   testGemini: (apiKey = '') =>
     request('/settings/test-gemini', {

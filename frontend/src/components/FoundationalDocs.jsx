@@ -17,15 +17,6 @@ const DOC_LABELS = {
 
 const DOC_ORDER = ['research', 'avatar', 'offer_brief', 'necessary_beliefs'];
 
-function formatElapsed(ms) {
-  if (!ms) return '';
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (minutes > 0) return `${minutes}m ${secs}s`;
-  return `${secs}s`;
-}
-
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr + 'Z'); // SQLite stores UTC without timezone suffix
@@ -368,7 +359,7 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
   const steps = docsData.steps || [];
   const [changelogRefreshKey, setChangelogRefreshKey] = useState(0);
 
-  // Generation mode: null | 'choosing' | 'auto' | 'manual' | 'upload'
+  // Generation mode: null | 'manual' | 'upload'
   const [generationMode, setGenerationMode] = useState(null);
 
   // Generation state (shared by auto & manual)
@@ -377,9 +368,6 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
   const [streamContent, setStreamContent] = useState('');
   const [completedSteps, setCompletedSteps] = useState(new Set());
   const [genError, setGenError] = useState('');
-
-  // Deep research progress state (auto mode only)
-  const [deepResearchProgress, setDeepResearchProgress] = useState(null);
 
   // Progress bar state
   const [genProgress, setGenProgress] = useState(0);
@@ -436,8 +424,8 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
   // --- Choice screen handlers ---
 
   const handleGenerateClick = () => {
-    setGenerationMode('choosing');
     setGenError('');
+    handleChooseManual();
   };
 
   const refreshDocsForDisplay = async () => {
@@ -465,16 +453,8 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
     }
   };
 
-  const handleChooseAuto = () => {
-    setGenerationMode('auto');
-    handleGenerate();
-  };
-
   const handleBackToChoice = () => {
-    setGenerationMode('choosing');
-    setManualStep(1);
-    setManualResearchText('');
-    setResearchPrompts(null);
+    handleBackToList();
   };
 
   const handleBackToList = () => {
@@ -534,78 +514,6 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
       setCopiedPrompt(index);
       setTimeout(() => setCopiedPrompt(null), 2000);
     }
-  };
-
-  // --- Auto generation (existing flow) ---
-
-  const handleGenerate = () => {
-    setGenError('');
-    setStreamContent('');
-    setCurrentStep(null);
-    setCompletedSteps(new Set());
-    setDeepResearchProgress(null);
-    setGenProgress(0);
-    setGenProgressMsg('');
-    genStartTimeRef.current = Date.now();
-
-    startStream(() => api.generateDocs(projectId, (event) => {
-      switch (event.type) {
-        case 'step_start':
-          setCurrentStep(event);
-          setStreamContent('');
-          setDeepResearchProgress(null);
-          if (STEP_PROGRESS[event.step] !== undefined) {
-            setGenProgress(prev => Math.max(prev, STEP_PROGRESS[event.step]));
-          }
-          setGenProgressMsg(STEP_LABELS[event.step] || event.label || '');
-          break;
-        case 'chunk':
-          setStreamContent(prev => prev + event.text);
-          break;
-        case 'deep_research_progress':
-          setDeepResearchProgress(event);
-          // Interpolate deep research progress: 8% → 50% based on searches
-          if (event.searchesCompleted) {
-            const drProgress = Math.min(8 + Math.round(event.searchesCompleted * 2.5), 50);
-            setGenProgress(prev => Math.max(prev, drProgress));
-            setGenProgressMsg(`Deep research — ${event.searchesCompleted} searches completed...`);
-          }
-          break;
-        case 'step_complete':
-          setCompletedSteps(prev => new Set([...prev, event.step]));
-          if (event.savedAs) loadDocs();
-          // Bump progress past the step's start value
-          if (STEP_PROGRESS[event.step] !== undefined) {
-            const nextStep = event.step + 1;
-            const nextVal = STEP_PROGRESS[nextStep] || (STEP_PROGRESS[event.step] + 5);
-            setGenProgress(prev => Math.max(prev, nextVal - 1));
-          }
-          break;
-        case 'error':
-          setGenError(event.message);
-          break;
-      }
-    })).then(() => {
-      setGenProgress(100);
-      setGenProgressMsg('Complete');
-      setTimeout(async () => {
-        try {
-          await refreshDocsForDisplay();
-          setCurrentStep(null);
-          setDeepResearchProgress(null);
-          setGenerationMode(null);
-          setGenProgress(0);
-          setGenProgressMsg('');
-          genStartTimeRef.current = null;
-        } catch (err) {
-          setGenError(`Documents were generated, but the page could not refresh them: ${err.message}`);
-        }
-      }, 500);
-    }).catch(err => {
-      if (err.name !== 'AbortError') setGenError(err.message);
-      setGenProgress(0);
-      genStartTimeRef.current = null;
-    });
   };
 
   // --- Manual generation (Steps 5-8 only) ---
@@ -681,20 +589,15 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
     setStreamContent('');
     setCurrentStep(null);
     setCompletedSteps(new Set());
-    setDeepResearchProgress(null);
 
     startStream(() => api.regenerateDoc(projectId, docType, (event) => {
       switch (event.type) {
         case 'step_start':
           setCurrentStep(event);
           setStreamContent('');
-          setDeepResearchProgress(null);
           break;
         case 'chunk':
           setStreamContent(prev => prev + event.text);
-          break;
-        case 'deep_research_progress':
-          setDeepResearchProgress(event);
           break;
         case 'step_complete':
           setCompletedSteps(prev => new Set([...prev, event.step]));
@@ -706,7 +609,6 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
     })).then(() => {
       setRegenerating(null);
       setCurrentStep(null);
-      setDeepResearchProgress(null);
       loadDocs();
     }).catch(err => {
       if (err.name !== 'AbortError') setGenError(err.message);
@@ -799,124 +701,6 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
 
   const hasDocs = docs.length > 0;
   const isGenerating = generating || regenerating;
-
-  // ========================
-  // RENDER: Choice Screen
-  // ========================
-  if (generationMode === 'choosing') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-serif font-[420] text-ed-ink">
-            {hasDocs ? 'Regenerate Foundational Documents' : 'Generate Foundational Documents'}
-          </h3>
-          <button onClick={handleBackToList} className="text-sm text-ed-ink2 hover:text-ed-ink">
-            Cancel
-          </button>
-        </div>
-
-        <p className="text-sm text-ed-ink2">
-          Choose how you want to conduct the market research for your foundational documents.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Card 1: Upload Existing Documents */}
-          <div className="border-2 border-ed-accent/15 rounded-lg p-6 hover:border-ed-accent/30 transition-colors bg-ed-accent/5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">📤</span>
-              <h4 className="font-serif font-[420] text-ed-ink">Upload Documents</h4>
-            </div>
-
-            <p className="text-sm text-ed-ink2 mb-3">
-              Already have your foundational documents? Upload them directly — paste text or drag and drop files.
-            </p>
-
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center gap-2 text-sm text-ed-accent">
-                <span>✓</span> Skip all generation steps
-              </div>
-              <div className="flex items-center gap-2 text-sm text-ed-accent">
-                <span>✓</span> Free — no API costs
-              </div>
-              <div className="flex items-center gap-2 text-sm text-ed-ink2">
-                <span>•</span> Drag & drop or paste your docs
-              </div>
-            </div>
-
-            <button
-              onClick={handleChooseUpload}
-              className="w-full bg-ed-accent text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-ed-accent/90 transition-colors"
-            >
-              Upload Existing Docs
-            </button>
-          </div>
-
-          {/* Card 2: Manual Research (Recommended) */}
-          <div className="border-2 border-ed-green/15 rounded-lg p-6 hover:border-ed-green/30 transition-colors bg-ed-green/5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">📋</span>
-              <h4 className="font-serif font-[420] text-ed-ink">Generate with Prompts</h4>
-              <span className="text-xs bg-ed-green/10 text-ed-green px-2 py-0.5 rounded-full">Recommended</span>
-            </div>
-
-            <p className="text-sm text-ed-ink2 mb-3">
-              We'll show you the exact prompts to use in ChatGPT or Claude. Do the research yourself, then upload it here.
-            </p>
-
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center gap-2 text-sm text-ed-green">
-                <span>✓</span> Free — no API cost for research
-              </div>
-              <div className="flex items-center gap-2 text-sm text-ed-green">
-                <span>✓</span> Use ChatGPT Deep Research or Claude
-              </div>
-              <div className="flex items-center gap-2 text-sm text-ed-ink2">
-                <span>•</span> ~$0.50-2 for synthesis steps (GPT-4.1)
-              </div>
-            </div>
-
-            <button
-              onClick={handleChooseManual}
-              className="w-full bg-ed-green text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-ed-green/90 transition-colors"
-            >
-              Start Manual Research
-            </button>
-          </div>
-
-          {/* Card 3: Automated Deep Research */}
-          <div className="border-2 border-ed-accent/15 rounded-lg p-6 hover:border-ed-accent/30 transition-colors">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-2xl">🤖</span>
-              <h4 className="font-serif font-[420] text-ed-ink">Run Deep Research via API</h4>
-            </div>
-
-            <p className="text-sm text-ed-ink2 mb-3">
-              The AI will autonomously browse the web, read forums, reviews, and articles to build a comprehensive research document.
-            </p>
-
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center gap-2 text-sm text-ed-accent-mid">
-                <span>•</span> Fully automated, hands-off
-              </div>
-              <div className="flex items-center gap-2 text-sm text-ed-accent-mid">
-                <span>•</span> Takes 5-15 minutes
-              </div>
-              <div className="flex items-center gap-2 text-sm text-ed-accent font-medium">
-                <span>⚠️</span> Estimated cost: $10-30 per run
-              </div>
-            </div>
-
-            <button
-              onClick={handleChooseAuto}
-              className="w-full bg-ed-accent text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-ed-accent/90 transition-colors"
-            >
-              Start Automated Research
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ========================
   // RENDER: Manual Prompts Walkthrough (manualStep 1)
@@ -1280,46 +1064,6 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
             </div>
           )}
 
-          {/* Deep research progress panel (auto mode only) */}
-          {currentStep?.mode === 'deep_research' && deepResearchProgress && !streamContent && (
-            <div className="mb-4 bg-ed-accent/5 border border-ed-accent/15 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-3 h-3 bg-ed-accent rounded-full animate-pulse" />
-                <h4 className="font-medium text-ed-accent">Deep Research in Progress</h4>
-              </div>
-
-              <p className="text-sm text-ed-accent-mid mb-3">
-                The AI is autonomously browsing the web, reading forums, reviews, and articles to build a comprehensive research document.
-                This typically takes 5-15 minutes.
-              </p>
-
-              <div className="grid grid-cols-3 gap-3 mb-3">
-                <div className="bg-ed-surface rounded p-2 text-center">
-                  <div className="text-lg font-bold text-ed-accent-mid">
-                    {deepResearchProgress.searchesCompleted || 0}
-                  </div>
-                  <div className="text-xs text-ed-ink2">Web Searches</div>
-                </div>
-                <div className="bg-ed-surface rounded p-2 text-center">
-                  <div className="text-lg font-bold text-ed-accent-mid">
-                    {deepResearchProgress.status || 'starting'}
-                  </div>
-                  <div className="text-xs text-ed-ink2">Status</div>
-                </div>
-                <div className="bg-ed-surface rounded p-2 text-center">
-                  <div className="text-lg font-bold text-ed-accent-mid">
-                    {formatElapsed(deepResearchProgress.elapsedMs)}
-                  </div>
-                  <div className="text-xs text-ed-ink2">Elapsed</div>
-                </div>
-              </div>
-
-              <p className="text-xs text-ed-accent">
-                {deepResearchProgress.message}
-              </p>
-            </div>
-          )}
-
           {/* Live stream content */}
           {currentStep && streamContent && (
             <div>
@@ -1337,7 +1081,7 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
           )}
 
           {/* Waiting state */}
-          {currentStep && !streamContent && !deepResearchProgress && (
+          {currentStep && !streamContent && (
             <div>
               <p className="text-xs text-ed-ink2 mb-2">
                 Step {currentStep.step}: {currentStep.label}
@@ -1386,6 +1130,12 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
                   {removingDocs ? 'Removing...' : 'Remove All Documents'}
                 </button>
               )}
+              <button
+                onClick={handleChooseUpload}
+                className="px-4 py-2 rounded-[7px] text-[13px] border border-ed-line text-ed-ink2 bg-ed-surface hover:bg-ed-bg transition-colors"
+              >
+                Upload Existing Docs
+              </button>
               <button
                 onClick={handleGenerateClick}
                 className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors"
@@ -1463,16 +1213,14 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
                 >
                   Edit
                 </button>
-                <button
-                  onClick={() => handleRegenerate(viewDoc.doc_type)}
-                  className={`action-link ${
-                    viewDoc.doc_type === 'research'
-                      ? ''
-                      : 'text-ed-accent bg-ed-accent/10 hover:bg-ed-accent/15 hover:text-ed-accent'
-                  }`}
-                >
-                  {viewDoc.doc_type === 'research' ? 'Re-run Deep Research' : 'Regenerate'}
-                </button>
+                {viewDoc.doc_type !== 'research' && (
+                  <button
+                    onClick={() => handleRegenerate(viewDoc.doc_type)}
+                    className="action-link text-ed-accent bg-ed-accent/10 hover:bg-ed-accent/15 hover:text-ed-accent"
+                  >
+                    Regenerate
+                  </button>
+                )}
                 <button
                   onClick={() => setViewDoc(null)}
                   className="ed-ghost text-[13px]"

@@ -1182,19 +1182,18 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
 
       if (!(await attachProductImage(options))) return;
 
-      // Send prompt-edit references separately for OpenAI; Gemini keeps the legacy
-      // single-reference behavior by using the edit reference as the image input.
-      if (editReferenceFile) {
-        const sourceRef = editReferenceFile;
-        try {
-          const { base64, mime, file: resized } = await resizeAndBase64(sourceRef);
-          if (sourceRef === editReferenceFile) {
-            options.reference_image = base64;
-            options.reference_image_mime = mime;
-            if (!options.product_image && imageModel !== 'gpt-image-2') {
-              options.product_image = base64;
-              options.product_image_mime = mime;
-            }
+          // Use the edit reference as the image input for Gemini rendering.
+          if (editReferenceFile) {
+            const sourceRef = editReferenceFile;
+            try {
+              const { base64, mime, file: resized } = await resizeAndBase64(sourceRef);
+              if (sourceRef === editReferenceFile) {
+                options.reference_image = base64;
+                options.reference_image_mime = mime;
+                if (!options.product_image) {
+                  options.product_image = base64;
+                  options.product_image_mime = mime;
+                }
             resizedFiles.push(resized);
           }
         } catch { /* non-fatal — proceed without the reference image */ }
@@ -2693,7 +2692,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
               <div className="mb-5">
                 <label className="text-[11px] uppercase tracking-[0.14em] text-ed-ink3 mb-2 flex items-center gap-1 font-geist">
                   Image Generator
-                  <InfoTooltip text="Choose which image model renders the final ad. Gemini is the default path; GPT Image 2 requires verified OpenAI image-model access." position="right" />
+                  <InfoTooltip text="Choose which Gemini image model renders the final ad." position="right" />
                 </label>
                 <select
                   value={imageModel}
@@ -2702,12 +2701,10 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
                 >
                   <option value="nano-banana-pro">Nano Banana Pro (Gemini 3 Pro)</option>
                   <option value="nano-banana-2">Nano Banana 2 (Gemini 3.1 Flash)</option>
-                  <option value="gpt-image-2">GPT Image 2 (OpenAI)</option>
                 </select>
                 <p className="text-[10px] text-ed-ink3 mt-1">
                   {imageModel === 'nano-banana-pro' && 'High-fidelity Gemini image generation.'}
                   {imageModel === 'nano-banana-2' && 'Faster Gemini generation with improved text rendering, up to 4K (current default).'}
-                  {imageModel === 'gpt-image-2' && 'OpenAI image generation with layout + product references. Verify access in Settings with Test GPT Image 2; the check is user-triggered because it is billable.'}
                 </p>
               </div>
 
@@ -3194,7 +3191,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
               : 'Generate ad'}
           </button>
           <span className="font-mono-ed text-[11.5px] text-ed-ink3">
-            {imageModel === 'gpt-image-1' ? '~$0.19 · ~45s' : '~$0.04 · ~18s'}
+            ~Gemini rate · ~18s
           </span>
         </div>
 

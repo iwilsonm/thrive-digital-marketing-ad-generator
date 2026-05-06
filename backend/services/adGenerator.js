@@ -1,7 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { chat, chatWithImage, chatWithImages } from './openai.js';
 import { generateImage as geminiGenerateImage } from './gemini.js';
-import { generateImage as openaiGenerateImage } from './openai.js';
 
 // Batch-pipeline LLM model selection (per-call-type, chosen for capability).
 // Migrated off Anthropic 2026-04-30 — see changelog for rationale.
@@ -11,22 +10,15 @@ const BATCH_VISION_MODEL = 'gpt-4.1';   // image-prompt-with-vision: 4.1 has rel
 // Whitelist of allowed image-model strings + which provider handles each.
 // Prevents devtools-injected arbitrary strings from reaching the API.
 const GEMINI_MODELS = new Set(['nano-banana-pro', 'nano-banana-2', 'gemini-3-pro']);
-const OPENAI_IMAGE_MODELS = new Set(['gpt-image-2']);
 
 function resolveImageProvider(imageModel) {
   if (!imageModel || GEMINI_MODELS.has(imageModel)) return geminiGenerateImage;
-  if (OPENAI_IMAGE_MODELS.has(imageModel)) return openaiGenerateImage;
   throw new Error(`Unknown image model: ${imageModel}`);
 }
 
 function imageModelLabel(imageModel) {
   if (imageModel === 'nano-banana-2') return 'Nano Banana 2';
-  if (imageModel === 'gpt-image-2') return 'GPT Image 2';
   return 'Nano Banana Pro';
-}
-
-function isOpenAIImageModel(imageModel) {
-  return OPENAI_IMAGE_MODELS.has(imageModel);
 }
 
 function makeRenderReference(base64, mimeType, role) {
@@ -733,87 +725,16 @@ export async function generateAd(projectId, options = {}) {
   }
 }
 
-/**
- * Shared helper: Gemini image generation → upload to Convex storage → upload to Drive → finalize record.
- * Used by both generateAd() (full pipeline) and regenerateImageOnly() (prompt-only).
- */
-async function assessGPTImageRender({ imageBuffer, mimeType, imagePrompt, expectedHeadline, expectedBodyCopy, projectId }) {
-  try {
-    const expectedText = [
-      expectedHeadline ? `Required headline: ${expectedHeadline}` : null,
-      expectedBodyCopy ? `Required body copy: ${expectedBodyCopy}` : null,
-    ].filter(Boolean).join('\n') || 'No exact required text was provided.';
-
-    const result = await chatWithImage(
-      [],
-      `Review this generated paid social ad image. Be conservative: fail only if it is obviously not an ad.
-
-Return ONLY JSON with these fields:
-{
-  "is_product_only": boolean,
-  "has_visible_ad_layout": boolean,
-  "headline_visible": boolean,
-  "reason": "short explanation"
-}
-
-Failing examples: a standalone product photo, product cutout, or image with no visible ad layout/text. Minor text misspellings or imperfect typography should still pass.
-
-Image prompt:
-${imagePrompt}
-
-${expectedText}`,
-      imageBuffer.toString('base64'),
-      mimeType || 'image/png',
-      BATCH_VISION_MODEL,
-      { response_format: { type: 'json_object' }, operation: 'ad_image_qa', projectId }
-    );
-
-    const parsed = repairJSON(result);
-    const reason = parsed.reason || 'Generated image failed ad-layout QA.';
-    if (parsed.is_product_only === true) {
-      return { passed: false, reason: `Generated image appears to be product-only: ${reason}` };
-    }
-    if (parsed.has_visible_ad_layout === false) {
-      return { passed: false, reason: `Generated image does not appear to contain a visible ad layout: ${reason}` };
-    }
-    if (expectedHeadline && parsed.headline_visible === false) {
-      return { passed: false, reason: `Generated image appears to ignore the required headline: ${reason}` };
-    }
-    return { passed: true };
-  } catch (err) {
-    console.warn('[AdGenerator] GPT Image QA failed; allowing image to complete:', err.message);
-    return { passed: true, warning: err.message };
-  }
-}
-
 async function generateAndSaveImage({ adId, projectId, project, imagePrompt, aspectRatio, angle, productImage, imageModel, renderReferenceImages = [], expectedHeadline = null, expectedBodyCopy = null, emit, modeLabel = 'Mode1' }) {
   const modelLabel = imageModelLabel(imageModel);
   const imageGen = resolveImageProvider(imageModel);
-  const isOpenAIImage = isOpenAIImageModel(imageModel);
-  const providerProductImage = isOpenAIImage ? null : productImage;
   emitProgress(emit, adId, { status: 'generating_image', message: (productImage || renderReferenceImages.length > 0)
     ? `Generating image with ${modelLabel} (with product reference)...`
     : `Generating image with ${modelLabel}...`, progress: 70 });
 
-  const { imageBuffer, mimeType: imgMime, imageAttempts } = await imageGen(imagePrompt, aspectRatio, providerProductImage, {
+  const { imageBuffer, mimeType: imgMime, imageAttempts } = await imageGen(imagePrompt, aspectRatio, productImage, {
     projectId, operation: 'ad_image_generation', imageModel, imageSize: '2K',
-    referenceImages: isOpenAIImage ? renderReferenceImages : undefined,
   });
-
-  if (isOpenAIImage) {
-    emitProgress(emit, adId, { status: 'generating_image', message: 'Reviewing generated ad...', progress: 88 });
-    const qa = await assessGPTImageRender({
-      imageBuffer,
-      mimeType: imgMime,
-      imagePrompt,
-      expectedHeadline,
-      expectedBodyCopy,
-      projectId,
-    });
-    if (!qa.passed) {
-      throw new Error(qa.reason);
-    }
-  }
 
   emitProgress(emit, adId, { status: 'generating_image', message: 'Uploading image...', progress: 90 });
 

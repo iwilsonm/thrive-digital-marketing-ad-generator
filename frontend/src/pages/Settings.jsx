@@ -32,7 +32,7 @@ function KeyStatusPill({ set }) {
 const CREDENTIAL_DELETE_COPY = {
   openai_api_key: {
     label: 'OpenAI API Key',
-    message: 'Remove the OpenAI API key? Copywriting, Creative Director reasoning, GPT Image 2, and OpenAI checks will stop until a new key is saved.',
+    message: 'Remove the OpenAI API key? Copywriting, Creative Director reasoning, and OpenAI checks will stop until a new key is saved.',
   },
   gemini_api_key: {
     label: 'Gemini API Key',
@@ -463,7 +463,6 @@ export default function Settings() {
     gemini_rate_1k: '',
     gemini_rate_2k: '',
     gemini_rate_4k: '',
-    openai_image_rate_per_image: '',
     // Phase 2A — Meta integration global config
     meta_app_id: '',
     meta_app_secret: '',
@@ -510,7 +509,6 @@ export default function Settings() {
         gemini_rate_1k: data.gemini_rate_1k || '',
         gemini_rate_2k: data.gemini_rate_2k || '',
         gemini_rate_4k: data.gemini_rate_4k || '',
-        openai_image_rate_per_image: data.openai_image_rate_per_image || '',
       }));
       // (Cloudflare Pages projects removed — LP publishing now uses Shopify via Director config)
     } catch (err) {
@@ -531,7 +529,6 @@ export default function Settings() {
       if (form.gemini_rate_1k) payload.gemini_rate_1k = form.gemini_rate_1k;
       if (form.gemini_rate_2k) payload.gemini_rate_2k = form.gemini_rate_2k;
       if (form.gemini_rate_4k) payload.gemini_rate_4k = form.gemini_rate_4k;
-      if (form.openai_image_rate_per_image) payload.openai_image_rate_per_image = form.openai_image_rate_per_image;
       // Phase 2A — Meta integration
       if (form.meta_app_id.trim()) payload.meta_app_id = form.meta_app_id.trim();
       if (form.meta_app_secret.trim()) payload.meta_app_secret = form.meta_app_secret.trim();
@@ -568,16 +565,6 @@ export default function Settings() {
           await loadSettings();
           result = { ...result, message: 'OpenAI API key is valid and saved.' };
           toast.success('OpenAI key tested and saved');
-        }
-      } else if (service === 'openai_image') {
-        const candidateKey = form.openai_api_key.trim();
-        result = await api.testOpenAIImage('gpt-image-2', candidateKey);
-        if (candidateKey) {
-          await api.updateSettings({ openai_api_key: candidateKey });
-          setForm(prev => ({ ...prev, openai_api_key: '' }));
-          await loadSettings();
-          result = { ...result, message: 'OpenAI API key is valid for GPT Image 2 and saved.' };
-          toast.success('OpenAI Image key tested and saved');
         }
       } else if (service === 'gemini') {
         const candidateKey = form.gemini_api_key.trim();
@@ -874,7 +861,7 @@ export default function Settings() {
               <label className="text-[13px] font-medium text-ed-ink2 mb-1.5 flex items-center gap-2">
                 OpenAI API Key
                 <KeyStatusPill set={!!settings.openai_api_key} />
-                <InfoTooltip text="Used for copywriting, Creative Director reasoning, GPT Image 2 image generation, and quality checks. GPT Image 2 also requires image-model access on the key's OpenAI organization." position="right" />
+                <InfoTooltip text="Used for copywriting, Creative Director reasoning, and quality checks." position="right" />
               </label>
               <div className="flex flex-wrap gap-2">
                 <PasswordInput
@@ -895,23 +882,9 @@ export default function Settings() {
                   )}
                   Test
                 </button>
-                <button
-                  onClick={() => testConnection('openai_image')}
-                  disabled={testResults.openai_image === 'testing...'}
-                  className="ed-ghost text-[13px] whitespace-nowrap inline-flex items-center gap-1.5"
-                  title="Runs a billable low-quality GPT Image 2 access check."
-                >
-                  {testResults.openai_image === 'testing...' && (
-                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-                    </svg>
-                  )}
-                  Test GPT Image 2
-                </button>
                 <CredentialRemoveButton settingKey="openai_api_key" settings={settings} onRemove={setPendingCredentialDelete} />
               </div>
               {testResults.openai && <p className="text-[12px] text-ed-ink3 mt-1">{testResults.openai}</p>}
-              {testResults.openai_image && <p className="text-[12px] text-ed-ink3 mt-1">{testResults.openai_image}</p>}
             </div>
 
             <div>
@@ -1092,19 +1065,6 @@ export default function Settings() {
                 placeholder="e.g., 0.151"
               />
             </div>
-          </div>
-
-          <div className="mt-5 pt-5 border-t border-black/5">
-            <label className="block text-[12px] font-medium text-ed-ink2 mb-1.5 flex items-center gap-1">
-              OpenAI Image ($/image)
-              <InfoTooltip text="Manual estimate used for GPT Image 2 cost logging. Actual OpenAI image cost varies by quality, size, and reference-image input tokens. Defaults to $0.04." position="right" />
-            </label>
-            <input
-              value={form.openai_image_rate_per_image}
-              onChange={e => setForm(p => ({ ...p, openai_image_rate_per_image: e.target.value }))}
-              className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent max-w-xs"
-              placeholder="e.g., 0.04"
-            />
           </div>
         </div>
 

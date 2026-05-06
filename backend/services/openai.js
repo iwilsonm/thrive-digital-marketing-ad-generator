@@ -1,9 +1,7 @@
 import OpenAI from 'openai';
-import { toFile } from 'openai/uploads';
 import { getSetting } from '../convexClient.js';
 import { withRetry } from './retry.js';
-import { logOpenAICost, logOpenAIImageCost } from './costTracker.js';
-import { toOpenAIImageRuntimeError } from './openaiImageAccess.js';
+import { logOpenAICost } from './costTracker.js';
 
 let client = null;
 let lastApiKey = null;
@@ -48,37 +46,42 @@ function logCostFromResponse(response, model, options) {
 export async function chatStream(messages, onChunk, model = 'gpt-4.1', options = {}) {
   const openai = await getClient();
   const { operation, projectId } = options;
-  const stream = await withRetry(
-    () => openai.chat.completions.create({
-      model, messages, stream: true,
-      stream_options: { include_usage: true },
-    }),
-    { label: '[OpenAI chatStream]' }
-  );
 
-  let fullResponse = '';
-  let usage = null;
-  for await (const chunk of stream) {
-    if (chunk.usage) usage = chunk.usage;
-    const delta = chunk.choices?.[0]?.delta?.content || '';
-    if (delta) {
-      fullResponse += delta;
-      if (onChunk) onChunk(delta);
+  try {
+    const stream = await withRetry(
+      () => openai.chat.completions.create({
+        model, messages, stream: true,
+        stream_options: { include_usage: true },
+      }),
+      { label: '[OpenAI chatStream]' }
+    );
+
+    let fullResponse = '';
+    let usage = null;
+    for await (const chunk of stream) {
+      if (chunk.usage) usage = chunk.usage;
+      const delta = chunk.choices?.[0]?.delta?.content || '';
+      if (delta) {
+        fullResponse += delta;
+        if (onChunk) onChunk(delta);
+      }
     }
-  }
 
-  // Auto-log cost from final chunk usage
-  if (usage) {
-    logOpenAICost({
-      model,
-      operation: operation || 'other',
-      inputTokens: usage.prompt_tokens || 0,
-      outputTokens: usage.completion_tokens || 0,
-      projectId: projectId || null,
-    }).catch(() => {});
-  }
+    // Auto-log cost from final chunk usage
+    if (usage) {
+      logOpenAICost({
+        model,
+        operation: operation || 'other',
+        inputTokens: usage.prompt_tokens || 0,
+        outputTokens: usage.completion_tokens || 0,
+        projectId: projectId || null,
+      }).catch(() => {});
+    }
 
-  return fullResponse;
+    return fullResponse;
+  } catch (err) {
+    throw toOpenAIUserFacingError(err);
+  }
 }
 
 /**
@@ -94,6 +97,72 @@ function isModelNotFoundError(err) {
   if (code === 'model_not_found' || type === 'model_not_found') return true;
   if (status === 404 && /model/i.test(err.message || '')) return true;
   return false;
+}
+
+const OPENAI_BILLING_MESSAGE = 'OpenAI request blocked — your account shows zero usable quota for this model. Add billing details or check usage limits at https://platform.openai.com/account/billing.';
+const OPENAI_RATE_LIMIT_MESSAGE = 'OpenAI rate limit reached. Please wait a moment and try again.';
+
+function collectProviderErrorMessages(value, seen = new Set()) {
+  if (!value || seen.has(value)) return [];
+
+  if (typeof value === 'string') return [value];
+  if (value instanceof Error) {
+    seen.add(value);
+    return [
+      value.message,
+      ...collectProviderErrorMessages(value.error, seen),
+      ...collectProviderErrorMessages(value.response, seen),
+      ...collectProviderErrorMessages(value.cause, seen),
+    ].filter(Boolean);
+  }
+  if (typeof value !== 'object') return [];
+
+  seen.add(value);
+  const messages = [];
+  if (typeof value.message === 'string') messages.push(value.message);
+  if (value.error) messages.push(...collectProviderErrorMessages(value.error, seen));
+  if (value.response) messages.push(...collectProviderErrorMessages(value.response, seen));
+  if (value.cause) messages.push(...collectProviderErrorMessages(value.cause, seen));
+  if (Array.isArray(value.details)) messages.push(...value.details.flatMap(detail => collectProviderErrorMessages(detail, seen)));
+  return messages;
+}
+
+function getProviderErrorText(err) {
+  return collectProviderErrorMessages(err).join(' ');
+}
+
+function isOpenAIBillingError(err, providerErrorText = getProviderErrorText(err)) {
+  const code = err?.code || err?.error?.code;
+  const type = err?.type || err?.error?.type;
+  const text = providerErrorText.toLowerCase();
+  return code === 'billing_hard_limit_reached'
+    || type === 'insufficient_quota'
+    || code === 'insufficient_quota'
+    || text.includes('insufficient_quota')
+    || text.includes('billing_hard_limit_reached')
+    || text.includes('billing');
+}
+
+function isOpenAIRateLimitError(err, providerErrorText = getProviderErrorText(err)) {
+  const status = err?.status || err?.statusCode || err?.httpCode || err?.response?.status;
+  const code = err?.code || err?.error?.code;
+  const type = err?.type || err?.error?.type;
+  return status === 429
+    || code === 'rate_limit_exceeded'
+    || type === 'rate_limit_exceeded'
+    || code === 'insufficient_quota'
+    || type === 'insufficient_quota'
+    || /rate.?limit|quota/i.test(providerErrorText);
+}
+
+function toOpenAIUserFacingError(err) {
+  const providerErrorText = getProviderErrorText(err);
+  if (!isOpenAIRateLimitError(err, providerErrorText)) return err;
+  const mapped = new Error(isOpenAIBillingError(err, providerErrorText)
+    ? OPENAI_BILLING_MESSAGE
+    : OPENAI_RATE_LIMIT_MESSAGE);
+  if (err?.imageAttempts) mapped.imageAttempts = err.imageAttempts;
+  return mapped;
 }
 
 const OPENAI_FALLBACK_CHAIN = {
@@ -149,143 +218,19 @@ export async function chat(messages, model = 'gpt-4.1', options = {}) {
         } catch { /* swallow */ }
       }
       activeModel = fallbackModel;
-      const response = await withRetry(
-        () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }),
-        { label: `[OpenAI chat ${activeModel}]` }
-      );
-      logCostFromResponse(response, activeModel, { operation, projectId });
-      return response.choices[0].message.content;
-    }
-    throw err;
-  }
-}
-
-/**
- * Run a deep research query using the Responses API with o3-deep-research.
- * Cost is logged from billing API sync (Responses API doesn't return token usage in the same format).
- */
-export async function deepResearch(prompt, options = {}) {
-  const openai = await getClient();
-  const {
-    instructions,
-    onProgress,
-    pollIntervalMs = 5000,
-    timeoutMs = 30 * 60 * 1000,
-    model = 'o3-deep-research',
-    operation = 'deep_research',
-    projectId = null,
-  } = options;
-
-  const input = [];
-  if (instructions) {
-    input.push({
-      role: 'developer',
-      content: [{ type: 'input_text', text: instructions }]
-    });
-  }
-  input.push({
-    role: 'user',
-    content: [{ type: 'input_text', text: prompt }]
-  });
-
-  let response = await withRetry(
-    () => openai.responses.create({
-      model,
-      input,
-      background: true,
-      tools: [
-        { type: 'web_search_preview' }
-      ],
-      reasoning: {
-        summary: 'auto'
+      try {
+        const response = await withRetry(
+          () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }),
+          { label: `[OpenAI chat ${activeModel}]` }
+        );
+        logCostFromResponse(response, activeModel, { operation, projectId });
+        return response.choices[0].message.content;
+      } catch (fallbackErr) {
+        throw toOpenAIUserFacingError(fallbackErr);
       }
-    }),
-    { label: '[OpenAI deepResearch init]' }
-  );
-
-  if (onProgress) {
-    onProgress({
-      status: response.status,
-      message: 'Deep research started. The model is browsing the web and analyzing sources...'
-    });
-  }
-
-  const startTime = Date.now();
-  while (response.status === 'queued' || response.status === 'in_progress') {
-    if (Date.now() - startTime > timeoutMs) {
-      throw new Error(`Deep research timed out after ${timeoutMs / 1000 / 60} minutes`);
     }
-
-    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-
-    response = await withRetry(
-      () => openai.responses.retrieve(response.id),
-      { label: '[OpenAI deepResearch poll]', maxRetries: 2 }
-    );
-
-    if (onProgress) {
-      const searchCalls = (response.output || []).filter(o => o.type === 'web_search_call');
-      const reasoningSteps = (response.output || []).filter(o => o.type === 'reasoning');
-
-      onProgress({
-        status: response.status,
-        searchesCompleted: searchCalls.length,
-        reasoningSteps: reasoningSteps.length,
-        message: `Status: ${response.status} | ${searchCalls.length} web searches completed`,
-        elapsedMs: Date.now() - startTime
-      });
-    }
+    throw toOpenAIUserFacingError(err);
   }
-
-  if (response.status === 'failed') {
-    const errorMsg = response.error?.message || 'Deep research failed with unknown error';
-    throw new Error(`Deep research failed: ${errorMsg}`);
-  }
-
-  if (response.status === 'cancelled') {
-    throw new Error('Deep research was cancelled');
-  }
-
-  // Log cost if usage data is available in the Responses API response
-  if (response.usage) {
-    logOpenAICost({
-      model,
-      operation,
-      inputTokens: response.usage.input_tokens || response.usage.prompt_tokens || 0,
-      outputTokens: response.usage.output_tokens || response.usage.completion_tokens || 0,
-      projectId,
-    }).catch(() => {});
-  }
-
-  const outputMessage = (response.output || []).find(
-    o => o.type === 'message' && o.role === 'assistant'
-  );
-
-  if (!outputMessage) {
-    if (response.output_text) {
-      return { text: response.output_text, citations: [] };
-    }
-    throw new Error('Deep research completed but no output found');
-  }
-
-  const textContent = outputMessage.content?.find(c => c.type === 'output_text');
-  if (!textContent) {
-    throw new Error('Deep research completed but no text content found');
-  }
-
-  const citations = (textContent.annotations || [])
-    .filter(a => a.type === 'url_citation')
-    .map(a => ({
-      title: a.title,
-      url: a.url,
-      startIndex: a.start_index,
-      endIndex: a.end_index
-    }));
-
-  return {
-    text: textContent.text,
-    citations
-  };
 }
 
 /**
@@ -303,12 +248,16 @@ export async function chatWithImage(messages, text, base64Image, mimeType, model
     ]
   };
 
-  const response = await withRetry(
-    () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }),
-    { label: '[OpenAI chatWithImage]' }
-  );
-  logCostFromResponse(response, model, { operation, projectId });
-  return response.choices[0].message.content;
+  try {
+    const response = await withRetry(
+      () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }),
+      { label: '[OpenAI chatWithImage]' }
+    );
+    logCostFromResponse(response, model, { operation, projectId });
+    return response.choices[0].message.content;
+  } catch (err) {
+    throw toOpenAIUserFacingError(err);
+  }
 }
 
 /**
@@ -331,166 +280,14 @@ export async function chatWithImages(messages, text, images, model = 'gpt-4.1', 
 
   const newMessage = { role: 'user', content };
 
-  const response = await withRetry(
-    () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }),
-    { label: '[OpenAI chatWithImages]' }
-  );
-  logCostFromResponse(response, model, { operation, projectId });
-  return response.choices[0].message.content;
-}
-
-// =============================================
-// Image generation — OpenAI gpt-image-2 family
-// =============================================
-
-const ASPECT_TO_SIZE = {
-  '1:1': '1024x1024',
-  '4:5': '1024x1536',
-  '9:16': '1024x1536',
-  '16:9': '1536x1024',
-};
-const SIZE_FALLBACK = '1024x1024';
-const DEFAULT_IMAGE_MODEL = 'gpt-image-2';
-
-export function getOpenAIImageSize(aspectRatio = '1:1') {
-  return ASPECT_TO_SIZE[aspectRatio] || SIZE_FALLBACK;
-}
-
-function mimeToExtension(mimeType = 'image/png') {
-  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'jpg';
-  if (mimeType.includes('webp')) return 'webp';
-  return 'png';
-}
-
-function normalizeReferenceImages(referenceImages = [], fallbackImage = null) {
-  const refs = Array.isArray(referenceImages) ? referenceImages.filter(Boolean) : [];
-  const usableRefs = refs
-    .filter(ref => ref.base64 && ref.mimeType)
-    .map((ref, index) => ({
-      base64: ref.base64,
-      mimeType: ref.mimeType,
-      role: ref.role || (index === 0 ? 'layout' : 'reference'),
-    }));
-
-  if (usableRefs.length === 0 && fallbackImage?.base64 && fallbackImage?.mimeType) {
-    usableRefs.push({
-      base64: fallbackImage.base64,
-      mimeType: fallbackImage.mimeType,
-      role: fallbackImage.role || 'product',
-    });
-  }
-
-  return usableRefs.slice(0, 16);
-}
-
-async function referenceToFile(ref, index) {
-  const mimeType = ref.mimeType || 'image/png';
-  const ext = mimeToExtension(mimeType);
-  const buffer = Buffer.from(ref.base64, 'base64');
-  return toFile(buffer, `reference-${index + 1}.${ext}`, { type: mimeType });
-}
-
-export function buildGPTImageRenderPrompt(prompt, referenceImages = []) {
-  const refs = Array.isArray(referenceImages) ? referenceImages : [];
-  if (refs.length === 0) return prompt;
-
-  const hasLayoutRef = refs.some(ref => ref.role === 'layout' || ref.role === 'style' || ref.role === 'template');
-  const hasProductRef = refs.some(ref => ref.role === 'product');
-  const referenceDirection = hasLayoutRef
-    ? 'Use the first reference image for layout, composition, typography style, and visual hierarchy.'
-    : 'Use the reference image(s) for visual context while creating a complete ad layout.';
-  const productDirection = hasProductRef
-    ? 'Use product reference images only for product appearance and placement.'
-    : '';
-
-  return [
-    'Create a complete paid social ad, not a product-only render.',
-    referenceDirection,
-    productDirection,
-    'Include the requested headline, body copy, review text, badges, and other visible ad elements when provided.',
-    'Do not return a standalone product cutout or product photo.',
-    '',
-    prompt,
-  ].filter(Boolean).join('\n');
-}
-
-/**
- * Generate an ad image via OpenAI's Images API.
- *
- * Signature intentionally matches `gemini.js#generateImage` so `adGenerator.js`
- * can branch between providers without per-call shape changes.
- *
- * @param {string} prompt - Image generation prompt
- * @param {string} [aspectRatio='1:1'] - '1:1' | '4:5' | '9:16' | '16:9'
- * @param {object|null} [productImage=null] - Backward-compatible single product reference image
- * @param {object} [options]
- * @param {string|null} [options.projectId]
- * @param {string} [options.operation='ad_image_generation']
- * @param {string} [options.imageModel] - Defaults to gpt-image-2 (alias)
- * @param {Array<{base64:string,mimeType:string,role?:string}>} [options.referenceImages]
- * @returns {Promise<{ imageBuffer: Buffer, mimeType: string, textResponse: string }>}
- */
-export async function generateImage(prompt, aspectRatio = '1:1', productImage = null, options = {}) {
-  const {
-    projectId = null,
-    operation = 'ad_image_generation',
-    imageModel = DEFAULT_IMAGE_MODEL,
-    referenceImages = [],
-  } = options;
-
-  const openai = await getClient();
-  const size = getOpenAIImageSize(aspectRatio);
-  const normalizedReferences = normalizeReferenceImages(referenceImages, productImage);
-  const renderPrompt = buildGPTImageRenderPrompt(prompt, normalizedReferences);
-
-  let response;
   try {
-    response = await withRetry(
-      async () => {
-        if (normalizedReferences.length > 0) {
-          const files = await Promise.all(normalizedReferences.map(referenceToFile));
-          return openai.images.edit({
-            model: imageModel,
-            image: files,
-            prompt: renderPrompt,
-            size,
-            n: 1,
-            output_format: 'png',
-            quality: 'auto',
-          });
-        }
-        return openai.images.generate({
-          model: imageModel,
-          prompt: renderPrompt,
-          size,
-          n: 1,
-          output_format: 'png',
-          quality: 'auto',
-        });
-      },
-      {
-        maxRetries: 2,
-        label: '[OpenAI generateImage]',
-        shouldRetry: (err) => {
-          // Don't retry fatal states — model-not-found, auth, tier gate.
-          const status = err?.status || err?.response?.status;
-          if (status === 400 || status === 401 || status === 403 || status === 404) return false;
-          const msg = String(err?.message || '').toLowerCase();
-          if (msg.includes('model') && (msg.includes('not found') || msg.includes('does not exist'))) return false;
-          return true;
-        },
-      }
+    const response = await withRetry(
+      () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }),
+      { label: '[OpenAI chatWithImages]' }
     );
+    logCostFromResponse(response, model, { operation, projectId });
+    return response.choices[0].message.content;
   } catch (err) {
-    throw toOpenAIImageRuntimeError(err, imageModel);
+    throw toOpenAIUserFacingError(err);
   }
-
-  const b64 = response?.data?.[0]?.b64_json;
-  if (!b64) throw new Error('OpenAI image generation returned no image data');
-  const imageBuffer = Buffer.from(b64, 'base64');
-
-  // Fire-and-forget cost log — matches logGeminiCost pattern.
-  logOpenAIImageCost(projectId, operation, size, imageModel).catch(() => {});
-
-  return { imageBuffer, mimeType: 'image/png', textResponse: '' };
 }

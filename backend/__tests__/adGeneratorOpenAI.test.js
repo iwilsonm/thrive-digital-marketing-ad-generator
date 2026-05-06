@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   chat: vi.fn(),
   chatWithImage: vi.fn(),
   chatWithImages: vi.fn(),
-  openaiGenerateImage: vi.fn(),
   geminiGenerateImage: vi.fn(),
   convexQuery: vi.fn(),
   convexMutation: vi.fn(),
@@ -53,7 +52,6 @@ vi.mock('../services/openai.js', () => ({
   chat: mocks.chat,
   chatWithImage: mocks.chatWithImage,
   chatWithImages: mocks.chatWithImages,
-  generateImage: mocks.openaiGenerateImage,
 }));
 
 vi.mock('../services/gemini.js', () => ({
@@ -131,10 +129,6 @@ function setupHappyPath() {
     headline_visible: true,
     reason: 'looks like an ad',
   }));
-  mocks.openaiGenerateImage.mockResolvedValue({
-    imageBuffer: generatedImage,
-    mimeType: 'image/png',
-  });
   mocks.geminiGenerateImage.mockResolvedValue({
     imageBuffer: generatedImage,
     mimeType: 'image/png',
@@ -162,66 +156,7 @@ afterEach(() => {
   } catch { /* generated thumbnail may not exist */ }
 });
 
-describe('GPT Image 2 ad generation plumbing', () => {
-  it('passes template and product references into the final OpenAI render', async () => {
-    await generateAdMode2('project-1', {
-      templateImageId: 'template-1',
-      imageModel: 'gpt-image-2',
-      productImageBase64: Buffer.from('product-image').toString('base64'),
-      productImageMimeType: 'image/png',
-      headline: 'Headline',
-      bodyCopy: 'Body',
-    });
-
-    expect(mocks.openaiGenerateImage).toHaveBeenCalledTimes(1);
-    const [prompt, aspectRatio, productArg, options] = mocks.openaiGenerateImage.mock.calls[0];
-    expect(prompt).toBe('generated prompt');
-    expect(aspectRatio).toBe('1:1');
-    expect(productArg).toBeNull();
-    expect(options.imageModel).toBe('gpt-image-2');
-    expect(options.referenceImages).toEqual([
-      { base64: templateBase64, mimeType: 'image/jpeg', role: 'layout' },
-      { base64: Buffer.from('product-image').toString('base64'), mimeType: 'image/png', role: 'product' },
-    ]);
-  });
-
-  it('fails an obvious product-only GPT Image render before upload', async () => {
-    mocks.chatWithImage.mockResolvedValueOnce(JSON.stringify({
-      is_product_only: true,
-      has_visible_ad_layout: false,
-      headline_visible: false,
-      reason: 'only the product is visible',
-    }));
-
-    await expect(generateAdMode2('project-1', {
-      templateImageId: 'template-1',
-      imageModel: 'gpt-image-2',
-      productImageBase64: Buffer.from('product-image').toString('base64'),
-      productImageMimeType: 'image/png',
-      headline: 'Headline',
-    })).rejects.toThrow('product-only');
-
-    expect(mocks.uploadBuffer).not.toHaveBeenCalled();
-    expect(mocks.convexMutation).toHaveBeenCalledWith('adCreatives.update', expect.objectContaining({
-      status: 'failed',
-    }));
-  });
-
-  it('allows completion if the QA service itself fails', async () => {
-    mocks.chatWithImage.mockRejectedValueOnce(new Error('vision unavailable'));
-
-    const ad = await generateAdMode2('project-1', {
-      templateImageId: 'template-1',
-      imageModel: 'gpt-image-2',
-      productImageBase64: Buffer.from('product-image').toString('base64'),
-      productImageMimeType: 'image/png',
-      headline: 'Headline',
-    });
-
-    expect(mocks.uploadBuffer).toHaveBeenCalledWith(generatedImage, 'image/png');
-    expect(ad.status).toBe('completed');
-  });
-
+describe('Gemini ad generation plumbing', () => {
   it('records completed_at on a successful Mode 1 ad update', async () => {
     await generateAd('project-1', {
       uploadedImageBase64: Buffer.from('uploaded-layout').toString('base64'),

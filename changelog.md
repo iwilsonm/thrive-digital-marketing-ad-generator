@@ -1,5 +1,17 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-06 — OpenAI and Anthropic quota error parity
+
+- OpenAI and Anthropic wrappers now distinguish billing/account-state quota failures from transient rate limits, mirroring the Gemini zero-quota behavior.
+
+## 2026-05-06 — Remove GPT Image 2
+
+- Removed the GPT Image 2 / OpenAI image-generation path, including the Settings test, AdStudio model option, backend route/service/tests, provider routing, and `openai_image_rate_per_image` setting.
+
+## 2026-05-06 — Manual-only foundational research
+
+- Removed API-based auto deep research from foundational documents. Manual research prompts, research upload, direct document upload, and downstream synthesis from uploaded research remain available.
+
 ## 2026-05-06 — Clarify Gemini zero-quota image errors
 
 - Gemini wrapper now surfaces a clearer error when Google returns limit: 0 / free_tier quota (billing/account state is the real cause), distinct from transient rate limits.

@@ -4,7 +4,6 @@ import { requireAuth } from '../auth.js';
 import { getProject, getLatestDoc, updateProject, getSystemDefaultAngle, createConductorAngle, invalidateQueryCache } from '../convexClient.js';
 import { convexClient, api } from '../convexClient.js';
 import {
-  generateAllDocs,
   regenerateDoc,
   generateFromManualResearch,
   findAndCorrectDocs,
@@ -224,16 +223,6 @@ router.post('/:projectId/generate-docs-manual', async (req, res) => {
 
   streamService(req, res, (sendEvent) =>
     generateFromManualResearch(req.params.projectId, researchContent.trim(), sendEvent)
-  );
-});
-
-// Generate all foundational docs (SSE streaming)
-router.post('/:projectId/generate-docs', async (req, res) => {
-  const project = await getProject(req.params.projectId);
-  if (!project) return res.status(404).json({ error: 'Project not found' });
-
-  streamService(req, res, (sendEvent) =>
-    generateAllDocs(req.params.projectId, sendEvent)
   );
 });
 
