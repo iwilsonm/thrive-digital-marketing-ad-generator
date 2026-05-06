@@ -1,5 +1,10 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Template Library preview modal portal
+
+- Template Library preview modal now renders via `createPortal` into `document.body`, avoiding ancestor transform/filter breaking `position: fixed` viewport anchoring.
+- Added a body-scroll lock with scrollbar compensation while the preview modal is open.
+
 ## 2026-05-07 — User-cancellable ad generation
 
 - Added user-cancellable single-ad generation with a new `/cancel` endpoint, `cancellation_requested_at` and `cancelled_by` fields on `ad_creatives`, and step-boundary cancellation polling in the ad generator.

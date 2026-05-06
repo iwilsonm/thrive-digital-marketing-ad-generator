@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api';
 import InfoTooltip from './InfoTooltip';
 import ConfirmDialog from './ConfirmDialog';
@@ -8,6 +9,11 @@ const ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // matches multer's 20 MB limit on the backend
 const HARD_CAP_FILES = 1000;             // defensive ceiling against a stray "select all" of a Pictures folder
 const UPLOAD_CONCURRENCY = 5;            // sliding-window: 5 in flight at any time
+
+function getScrollbarWidth() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 0;
+  return Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+}
 
 function normalizeTemplateTags(value) {
   const raw = Array.isArray(value) ? value : String(value || '').split(',');
@@ -68,6 +74,24 @@ export default function TemplateImages({ projectId }) {
     () => archivedTemplates.filter(t => templateHasTag(t, selectedTemplateTag)),
     [archivedTemplates, selectedTemplateTag]
   );
+
+  useEffect(() => {
+    if (!viewImage || typeof document === 'undefined') return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = getScrollbarWidth();
+
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [viewImage]);
 
   const handleBatchUpload = useCallback(async (rawFiles) => {
     setError('');
@@ -600,7 +624,7 @@ export default function TemplateImages({ projectId }) {
       )}
 
       {/* Full-size image modal */}
-      {viewImage && (
+      {viewImage && typeof document !== 'undefined' && createPortal(
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setViewImage(null)}
@@ -639,7 +663,8 @@ export default function TemplateImages({ projectId }) {
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       <ConfirmDialog
         open={!!pendingDeleteImage}
