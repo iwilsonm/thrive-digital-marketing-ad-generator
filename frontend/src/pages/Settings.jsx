@@ -560,11 +560,35 @@ export default function Settings() {
     try {
       let result;
       if (service === 'openai') {
-        result = await api.testOpenAI(form.openai_api_key.trim());
+        const candidateKey = form.openai_api_key.trim();
+        result = await api.testOpenAI(candidateKey);
+        if (candidateKey) {
+          await api.updateSettings({ openai_api_key: candidateKey });
+          setForm(prev => ({ ...prev, openai_api_key: '' }));
+          await loadSettings();
+          result = { ...result, message: 'OpenAI API key is valid and saved.' };
+          toast.success('OpenAI key tested and saved');
+        }
       } else if (service === 'openai_image') {
-        result = await api.testOpenAIImage('gpt-image-2', form.openai_api_key.trim());
+        const candidateKey = form.openai_api_key.trim();
+        result = await api.testOpenAIImage('gpt-image-2', candidateKey);
+        if (candidateKey) {
+          await api.updateSettings({ openai_api_key: candidateKey });
+          setForm(prev => ({ ...prev, openai_api_key: '' }));
+          await loadSettings();
+          result = { ...result, message: 'OpenAI API key is valid for GPT Image 2 and saved.' };
+          toast.success('OpenAI Image key tested and saved');
+        }
       } else if (service === 'gemini') {
-        result = await api.testGemini(form.gemini_api_key.trim());
+        const candidateKey = form.gemini_api_key.trim();
+        result = await api.testGemini(candidateKey);
+        if (candidateKey) {
+          await api.updateSettings({ gemini_api_key: candidateKey });
+          setForm(prev => ({ ...prev, gemini_api_key: '' }));
+          await loadSettings();
+          result = { ...result, message: 'Gemini API key is valid and saved.' };
+          toast.success('Gemini key tested and saved');
+        }
       } else if (service === 'anthropic') {
         const candidateKey = form.anthropic_api_key.trim();
         result = await api.testAnthropic(candidateKey);

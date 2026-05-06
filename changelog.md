@@ -1,5 +1,20 @@
 # Thrive Campaigns — Changelog
 
+## 2026-05-06 — Settings tests persist successful API keys
+
+- OpenAI, Gemini, and OpenAI Image Settings tests now save a pasted key after a successful test, matching the existing Anthropic pattern.
+- The test buttons still fall back to testing previously saved keys when the input field is empty.
+
+## 2026-05-06 — Restore Vercel cron secret
+
+- Restored `CRON_SECRET` in Vercel production with a newly generated 64-character hex secret so Vercel Cron routes can authenticate.
+- Documented missing production cron-path env gaps separately from the env-only fix.
+
+## 2026-05-06 — Stabilize Vercel Convex binding
+
+- Replaced the blank Vercel production `CONVEX_URL` project env value with the dedicated Thrive Convex deployment URL.
+- Verified no checked-in Vercel env block or deploy script is rewriting `CONVEX_URL`; the live binding is now validated across consecutive production deploys.
+
 ## 2026-05-06 — Settings API key test routes accept pasted keys
 
 - Settings test routes (openai/gemini/openai-image/test-model) accept `api_key` in the request body, matching the Anthropic pattern.
