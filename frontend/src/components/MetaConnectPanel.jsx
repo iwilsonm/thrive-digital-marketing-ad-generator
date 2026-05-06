@@ -440,7 +440,7 @@ export default function MetaConnectPanel({ projectId }) {
             <h3 className="text-[13px] font-semibold text-ed-ink mb-2">Meta setup checklist</h3>
             <ol className="list-decimal pl-4 space-y-1.5 text-[12px] text-ed-ink2 leading-relaxed">
               <li>In global Settings, save the Meta App ID and App Secret from the Meta developer app.</li>
-              <li>In Meta's OAuth settings, add this exact redirect URI: <code className="bg-cream px-1 rounded">https://creative-factory-software.vercel.app/api/meta/oauth/callback</code>.</li>
+              <li>In Meta's OAuth settings, add this exact redirect URI: <code className="bg-cream px-1 rounded">https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback</code>.</li>
               <li>Make sure the Meta user connecting here has access to the ad account and at least one Facebook Page.</li>
               <li>Click Connect, approve the requested ads and Page-list permissions, then select this project's ad account and Page.</li>
             </ol>
@@ -452,14 +452,14 @@ export default function MetaConnectPanel({ projectId }) {
             type="button"
             onClick={handleConnect}
             disabled={busy}
-            className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
           >
             {busy ? 'Opening…' : 'Connect Meta Account'}
           </button>
           {error && <div className="mt-3 text-sm text-ed-rust">{error}</div>}
           <p className="mt-3 text-xs text-ed-ink3">
             Requires Meta App ID + Secret in global Settings. Create one Facebook App once at
-            developers.facebook.com; Creative Factory reuses it for every project's OAuth.
+            developers.facebook.com; Thrive Campaigns reuses it for every project's OAuth.
           </p>
         </div>
       )}
@@ -536,7 +536,7 @@ export default function MetaConnectPanel({ projectId }) {
                 {pagesLoading && <div className="text-xs text-ed-ink3">Loading Pages…</div>}
                 {!pagesLoading && pages.length === 0 && (
                   <div className="text-xs text-ed-ink3 bg-cream rounded p-2">
-                    No Pages are visible to Creative Factory for this Meta connection. Posting requires Page-list permission plus admin/editor access to at least one Facebook Page. Reconnect Meta after approving the Page-list permission, then select the Page here.
+                    No Pages are visible to Thrive Campaigns for this Meta connection. Posting requires Page-list permission plus admin/editor access to at least one Facebook Page. Reconnect Meta after approving the Page-list permission, then select the Page here.
                   </div>
                 )}
                 {!pagesLoading && pages.length > 0 && (
@@ -580,7 +580,7 @@ export default function MetaConnectPanel({ projectId }) {
                 type="button"
                 onClick={handleCheckMcpAccess}
                 disabled={busy || checkingMcp || !status.account_id}
-                className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
               >
                 {checkingMcp ? 'Checking...' : 'Check MCP Access'}
               </button>
@@ -606,7 +606,7 @@ export default function MetaConnectPanel({ projectId }) {
                         type="button"
                         onClick={() => handleToggleReadPath('api')}
                         disabled={busy || currentReadPath === 'api'}
-                        className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                        className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
                       >
                         Use API Reads
                       </button>
@@ -616,7 +616,7 @@ export default function MetaConnectPanel({ projectId }) {
                         type="button"
                         onClick={() => handleTogglePostingPath('mcp')}
                         disabled={busy || currentPostingPath === 'mcp'}
-                        className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                        className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
                       >
                         Use MCP Posting
                       </button>
@@ -626,7 +626,7 @@ export default function MetaConnectPanel({ projectId }) {
                         type="button"
                         onClick={handleConnect}
                         disabled={busy}
-                        className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                        className="shrink-0 px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
                       >
                         Reconnect Meta
                       </button>
@@ -663,7 +663,7 @@ export default function MetaConnectPanel({ projectId }) {
                 type="button"
                 onClick={() => handleToggleReadPath('api')}
                 disabled={busy || currentReadPath === 'api'}
-                className={`flex-1 text-sm px-3 py-2 rounded ${currentReadPath === 'api' ? 'bg-ed-accent text-[#fbfaf6]' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
+                className={`flex-1 text-sm px-3 py-2 rounded ${currentReadPath === 'api' ? 'bg-ed-accent text-white' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
               >
                 API — current stable path
               </button>
@@ -671,7 +671,7 @@ export default function MetaConnectPanel({ projectId }) {
                 type="button"
                 onClick={() => handleToggleReadPath('mcp')}
                 disabled={busy || currentReadPath === 'mcp'}
-                className={`flex-1 text-sm px-3 py-2 rounded ${currentReadPath === 'mcp' ? 'bg-ed-accent text-[#fbfaf6]' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
+                className={`flex-1 text-sm px-3 py-2 rounded ${currentReadPath === 'mcp' ? 'bg-ed-accent text-white' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
               >
                 MCP — connector reads
               </button>
@@ -697,7 +697,7 @@ export default function MetaConnectPanel({ projectId }) {
                 type="button"
                 onClick={() => handleTogglePostingPath('mcp')}
                 disabled={busy || currentPostingPath === 'mcp'}
-                className={`flex-1 text-sm px-3 py-2 rounded ${currentPostingPath === 'mcp' ? 'bg-ed-accent text-[#fbfaf6]' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
+                className={`flex-1 text-sm px-3 py-2 rounded ${currentPostingPath === 'mcp' ? 'bg-ed-accent text-white' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
               >
                 MCP — recommended
               </button>
@@ -705,7 +705,7 @@ export default function MetaConnectPanel({ projectId }) {
                 type="button"
                 onClick={() => handleTogglePostingPath('api')}
                 disabled={busy || currentPostingPath === 'api'}
-                className={`flex-1 text-sm px-3 py-2 rounded ${currentPostingPath === 'api' ? 'bg-ed-accent text-[#fbfaf6]' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
+                className={`flex-1 text-sm px-3 py-2 rounded ${currentPostingPath === 'api' ? 'bg-ed-accent text-white' : 'bg-cream text-ed-ink hover:bg-cream/70'} disabled:opacity-100 disabled:cursor-default`}
               >
                 Direct API
               </button>

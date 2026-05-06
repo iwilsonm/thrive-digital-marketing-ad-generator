@@ -4,7 +4,7 @@ export const getCapabilities = query({
   args: {},
   handler: async () => {
     return {
-      app: "creative-factory-software",
+      app: "thrive-digital-marketing-ad-generator",
       version: 1,
       capabilities: {
         adSetAtomicCombine: true,

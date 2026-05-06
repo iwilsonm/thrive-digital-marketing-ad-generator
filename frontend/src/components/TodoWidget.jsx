@@ -154,7 +154,7 @@ export default function TodoWidget() {
               <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Notes (optional)..." rows={2}
                 className="text-[11px] text-ed-ink2 w-full bg-ed-surface border border-black/10 rounded-md px-1.5 py-1 outline-none focus:border-ed-accent focus:ring-2 focus:ring-ed-accent/15 resize-none" />
               <div className="flex items-center gap-1.5">
-                <button onClick={saveEdit} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[10px] px-2.5 py-0.5">Save</button>
+                <button onClick={saveEdit} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[10px] px-2.5 py-0.5">Save</button>
                 <button onClick={cancelEdit} className="ed-ghost text-[10px] px-2.5 py-0.5">Cancel</button>
               </div>
             </div>
@@ -260,7 +260,7 @@ export default function TodoWidget() {
               );
             })}
           </div>
-          <button type="submit" disabled={!newText.trim()} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[12px] px-3 py-1.5 disabled:opacity-30">Add</button>
+          <button type="submit" disabled={!newText.trim()} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[12px] px-3 py-1.5 disabled:opacity-30">Add</button>
         </div>
         {showNewNotes ? (
           <textarea value={newNotes} onChange={e => setNewNotes(e.target.value)} placeholder="Notes (optional)..." rows={2} className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent text-[11px] w-full mt-1.5 resize-none" />

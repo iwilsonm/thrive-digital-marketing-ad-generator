@@ -42,7 +42,7 @@ export default async (req, res) => {
   res.status(200).json({
     ok: status === 'ok',
     status,
-    service: 'creative-factory',
+    service: 'thrive-digital-marketing-ad-generator',
     timestamp: new Date().toISOString(),
     checks,
   });

@@ -212,7 +212,7 @@ export default function ObservationSettings({ projectId }) {
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[12px]">
+          <button onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[12px]">
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>

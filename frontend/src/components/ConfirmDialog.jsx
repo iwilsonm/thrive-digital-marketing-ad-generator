@@ -15,7 +15,7 @@ export default function ConfirmDialog({
 
   const confirmClass = tone === 'danger'
     ? 'bg-ed-rust hover:bg-ed-rust/90 text-white'
-    : 'bg-ed-accent hover:bg-ed-accent/90 text-[#fbfaf6]';
+    : 'bg-ed-accent hover:bg-ed-accent/90 text-white';
 
   const dialog = (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 fade-in">

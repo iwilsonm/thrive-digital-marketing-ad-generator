@@ -62,8 +62,8 @@ export default function PipelineProgress({ progress = 0, message = '', startTime
           style={{
             width: `${Math.max(progress, 2)}%`,
             background: progress >= 100
-              ? '#2A9D8F'
-              : 'linear-gradient(90deg, #0B1D3A, #132B52)',
+              ? '#38A638'
+              : 'linear-gradient(90deg, #38A638, #2F8F2F)',
           }}
         />
       </div>

@@ -74,7 +74,7 @@ export default function AdSetCard({
               type="button"
               onClick={handlePromote}
               disabled={promoting || adCount === 0}
-              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-xs px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-xs px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {promoting ? 'Promoting…' : 'Promote to Ready-to-Post'}
             </button>
@@ -87,7 +87,7 @@ export default function AdSetCard({
               type="button"
               onClick={() => onPostToMeta?.(adSet)}
               disabled={isPosting}
-              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-xs px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-xs px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isPosting ? 'Posting…' : 'Post to Meta'}
             </button>

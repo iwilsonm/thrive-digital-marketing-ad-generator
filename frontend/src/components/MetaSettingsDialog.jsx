@@ -159,7 +159,7 @@ export default function MetaSettingsDialog({ open, adSet, onClose, onSave }) {
 
         <div className="mt-5 flex items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="ed-ghost">Cancel</button>
-          <button type="button" onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50">
+          <button type="button" onClick={handleSave} disabled={saving} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>

@@ -286,11 +286,11 @@ function Sparkline({ snapshots, currency }) {
     <div>
       <div className="text-[11px] font-semibold text-ed-ink2 uppercase tracking-wider mb-1">Daily spend</div>
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-20 bg-ed-surface rounded border border-ed-line">
-        <polyline points={points} fill="none" stroke="#C4975A" strokeWidth="1.5" />
+        <polyline points={points} fill="none" stroke="#62B462" strokeWidth="1.5" />
         {data.map((v, i) => {
           const x = pad + (i / Math.max(1, data.length - 1)) * (w - pad * 2);
           const y = h - pad - (v / max) * (h - pad * 2);
-          return <circle key={i} cx={x} cy={y} r="2" fill="#C4975A" />;
+          return <circle key={i} cx={x} cy={y} r="2" fill="#62B462" />;
         })}
       </svg>
     </div>

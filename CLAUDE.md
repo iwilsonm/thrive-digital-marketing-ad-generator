@@ -30,9 +30,9 @@ A single-tenant web app for direct response copywriters and e-commerce brands. S
 6. **Landing Page Template Extraction** — Puppeteer capture + Claude vision analysis to extract reusable HTML skeleton templates from any URL.
 7. **Autonomous Agent System** — Three agents (Fixer, Creative Filter, Director) that auto-test, auto-heal, score ads, create flex ads, plan batches, auto-generate LPs, and learn from results.
 
-**Live at**: `creative-factory-software.vercel.app` (Vercel Pro)
-**Convex deployment**: `dev:elated-mastiff-709` at `https://elated-mastiff-709.convex.cloud` (single deployment serves both dev + prod traffic for this project)
-**GitHub**: `iwilsonm/creative-factory-software` (auto-deploy from main → Vercel)
+**Live at**: `thrive-digital-marketing-ad-generat.vercel.app` (Vercel Pro)
+**Convex deployments**: local dev `dev:impartial-shrimp-656` at `https://impartial-shrimp-656.convex.cloud`; production `prod:cheery-cobra-258` at `https://cheery-cobra-258.convex.cloud` (dedicated Thrive Digital Marketing project)
+**GitHub**: Thrive Digital Marketing fork (auto-deploy from main → Vercel)
 
 ### Tech Stack
 
@@ -86,7 +86,7 @@ All API keys and config are stored in the Convex `settings` table (not .env):
 | `gemini_rate_*` | Gemini pricing rates (auto-refreshed daily) |
 | `headline_ref_1`, `headline_ref_2`, `headline_ref_3` | Reference copywriting docs for headlines |
 
-Vercel env vars (set via Vercel project settings, not `.env`): `CONVEX_URL=https://elated-mastiff-709.convex.cloud`. Most secrets live in the Convex `settings` table (auto-loaded at runtime). Do not set `VITE_APP_BASE` on Vercel; the app is hosted at `/`. Set `VITE_APP_BASE=/admin/` only for the legacy VPS/Nginx admin deployment.
+Vercel env vars (set via Vercel project settings, not `.env`): `CONVEX_URL=https://cheery-cobra-258.convex.cloud`. Most secrets live in the Convex `settings` table (auto-loaded at runtime). Do not set `VITE_APP_BASE` on Vercel; the app is hosted at `/`. Set `VITE_APP_BASE=/admin/` only for the legacy VPS/Nginx admin deployment.
 
 On disk (gitignored): `config/service-account.json` (Google Drive service account; deployed via Vercel build).
 

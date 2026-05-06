@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 
-const COLORS = { passed: '#3a8c5e', observing: '#c08a3e', failed: '#b25340', insufficient: '#9a9a8e' };
+const COLORS = { passed: '#38a638', observing: '#62b462', failed: '#ef4444', insufficient: '#a3a3a3' };
 const ORDER = ['passed', 'observing', 'failed', 'insufficient'];
 const LEGEND = [
-  ['Passed', '#3a8c5e'],
-  ['Observing', '#c08a3e'],
-  ['Failed', '#b25340'],
-  ['Insufficient', '#9a9a8e'],
+  ['Passed', '#38a638'],
+  ['Observing', '#62b462'],
+  ['Failed', '#ef4444'],
+  ['Insufficient', '#a3a3a3'],
 ];
 
 function groupKey(adSet) {
@@ -68,7 +68,7 @@ export default function VerdictDistributionChart({ adSets }) {
               </div>
               <div
                 className="flex overflow-hidden"
-                style={{ height: 8, background: '#f0ebde', borderRadius: 3 }}
+                style={{ height: 8, background: '#ebebeb', borderRadius: 3 }}
               >
                 {ORDER.map((k) => {
                   const v = g[k] || 0;

@@ -61,33 +61,33 @@ export default function TimeseriesChart({ data, primary = 'spend', secondary = '
       >
         <defs>
           <linearGradient id="ts-area-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#a8543b" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#a8543b" stopOpacity="0" />
+            <stop offset="0%" stopColor="#38a638" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#38a638" stopOpacity="0" />
           </linearGradient>
         </defs>
 
         {gridlines.map((g, i) => (
           <g key={i}>
-            <line x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="#e6e1d4" strokeWidth="1" />
-            <text x={padL - 10} y={g.y + 4} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">{g.label}</text>
+            <line x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="#ebebeb" strokeWidth="1" />
+            <text x={padL - 10} y={g.y + 4} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">{g.label}</text>
           </g>
         ))}
 
         {data.map((d, i) => i % 2 === 1 && (
-          <text key={i} x={xAt(i)} y={h - 10} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
+          <text key={i} x={xAt(i)} y={h - 10} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
             {d.date.slice(5)}
           </text>
         ))}
 
         <path d={primaryArea} fill="url(#ts-area-grad)" />
-        <path d={primaryPath} fill="none" stroke="#a8543b" strokeWidth="1.8" />
-        <path d={secondaryPath} fill="none" stroke="#1d1c19" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.7" />
+        <path d={primaryPath} fill="none" stroke="#38a638" strokeWidth="1.8" />
+        <path d={secondaryPath} fill="none" stroke="#262626" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.7" />
 
         {data.map((d, i) => (
           <g key={i}>
             <rect x={xAt(i) - stepX / 2} y={padT} width={stepX} height={innerH} fill="transparent" onMouseEnter={() => setHover(i)} />
             {hover === i && (
-              <line x1={xAt(i)} x2={xAt(i)} y1={padT} y2={padT + innerH} stroke="#1d1c19" strokeWidth="0.8" opacity="0.4" />
+              <line x1={xAt(i)} x2={xAt(i)} y1={padT} y2={padT + innerH} stroke="#262626" strokeWidth="0.8" opacity="0.4" />
             )}
           </g>
         ))}

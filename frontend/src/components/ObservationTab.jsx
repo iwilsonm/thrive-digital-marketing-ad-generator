@@ -598,7 +598,7 @@ export default function ObservationTab({ projectId, project }) {
           {showUnlinked && (
             <div className="px-5 pb-4 space-y-3">
       <p className="text-[11px] text-ed-ink3 mb-3">
-        These Meta ad sets are not linked to Creative Factory. Link them to start observation, or archive rows you do not want to track.
+        These Meta ad sets are not linked to Thrive Campaigns. Link them to start observation, or archive rows you do not want to track.
       </p>
               {unlinkedError && (
                 <div className="p-4 rounded-lg bg-ed-rust/5 border border-ed-rust/30 text-[12px] text-ed-rust">
@@ -621,7 +621,7 @@ export default function ObservationTab({ projectId, project }) {
                             toast.error(err.message || 'Could not switch read path');
                           }
                         }}
-                        className="px-3 py-1.5 rounded-[7px] bg-ed-accent text-[#fbfaf6] text-[12px]"
+                        className="px-3 py-1.5 rounded-[7px] bg-ed-accent text-white text-[12px]"
                       >
                         Use API Reads
                       </button>
@@ -955,7 +955,7 @@ export default function ObservationTab({ projectId, project }) {
                 const appliedIds = tagsByAdSet.get(adSet.externalId) || [];
                 return (
                   <Fragment key={adSet.externalId}>
-                    <tr className={`border-b border-ed-line hover:bg-[rgba(168,84,59,0.025)] ${selected ? 'bg-ed-accent/5' : ''}`}>
+                    <tr className={`border-b border-ed-line hover:bg-[rgba(56,166,56,0.025)] ${selected ? 'bg-ed-accent/5' : ''}`}>
                       <td className="px-[18px] py-[12px]">
                         <input
                           type="checkbox"
@@ -1145,7 +1145,7 @@ function ChildAdsTable({
             const note = adNotesById.get(child.externalId)?.note || child.notes || '';
             const tagIds = tagsByAd.get(child.externalId) || [];
             return (
-              <tr key={child.externalId} className={`border-b border-ed-line hover:bg-[rgba(168,84,59,0.025)] ${selected ? 'bg-ed-accent/5' : ''}`}>
+              <tr key={child.externalId} className={`border-b border-ed-line hover:bg-[rgba(56,166,56,0.025)] ${selected ? 'bg-ed-accent/5' : ''}`}>
                 <td className="px-3 py-2">
                   <input
                     type="checkbox"

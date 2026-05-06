@@ -411,7 +411,7 @@ export default function ProjectDetail() {
           </div>
           <button
             onClick={() => { setTab('overview'); setSettingsSubTab('docs'); }}
-            className="px-4 py-1.5 text-[12px] rounded-[7px] bg-ed-accent text-[#fbfaf6] border border-ed-accent hover:bg-ed-accent/90 transition-colors"
+            className="px-4 py-1.5 text-[12px] rounded-[7px] bg-ed-accent text-white border border-ed-accent hover:bg-ed-accent/90 transition-colors"
           >
             Generate Docs
           </button>
@@ -625,7 +625,7 @@ export default function ProjectDetail() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-[13px] py-[7px] text-[12.5px] rounded-[7px] bg-ed-accent text-[#fbfaf6] border border-ed-accent hover:bg-ed-accent/90 transition-colors"
+                className="px-[13px] py-[7px] text-[12.5px] rounded-[7px] bg-ed-accent text-white border border-ed-accent hover:bg-ed-accent/90 transition-colors"
               >
                 {saving ? 'Saving...' : 'Save changes'}
               </button>

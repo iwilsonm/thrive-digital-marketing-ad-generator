@@ -59,7 +59,7 @@ export default function SaveViewDialog({ open, onClose, onSave }) {
           <button
             onClick={submit}
             disabled={!name.trim() || saving}
-            className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-[#fbfaf6] text-[12px]"
+            className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-white text-[12px]"
           >
             {saving ? 'Saving…' : 'Save view'}
           </button>

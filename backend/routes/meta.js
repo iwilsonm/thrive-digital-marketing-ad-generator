@@ -47,7 +47,7 @@ import { MCPNotAuthorizedError } from '../services/metaMcp.js';
 const router = Router();
 
 const REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI
-  || 'https://creative-factory-software.vercel.app/api/meta/oauth/callback';
+  || 'https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback';
 
 // Cookie name for state + PKCE binding. Single cookie holds all the OAuth-init
 // session data across the redirect to FB and back. We don't depend on

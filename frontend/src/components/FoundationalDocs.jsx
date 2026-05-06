@@ -142,7 +142,7 @@ function CopyCorrection({ projectId, onDocsUpdated, onCorrectionApplied }) {
         <button
           type="submit"
           disabled={!correction.trim() || searching}
-          className="px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-30 whitespace-nowrap"
+          className="px-3 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-30 whitespace-nowrap"
         >
           {searching ? (
             <span className="flex items-center gap-1.5">
@@ -190,7 +190,7 @@ function CopyCorrection({ projectId, onDocsUpdated, onCorrectionApplied }) {
                 <button
                   onClick={handleApply}
                   disabled={applying}
-                  className="px-4 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                  className="px-4 py-1.5 rounded-[7px] text-[12px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
                 >
                   {applying ? 'Applying...' : `Apply ${results.corrections.length === 1 ? 'Correction' : 'All Corrections'}`}
                 </button>
@@ -1388,7 +1388,7 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
               )}
               <button
                 onClick={handleGenerateClick}
-                className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors"
+                className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors"
               >
                 {hasDocs ? 'Regenerate All Docs' : 'Generate Foundational Docs'}
               </button>
@@ -1420,7 +1420,7 @@ export default function FoundationalDocs({ projectId, projectStatus, onDocsChang
               <button
                 onClick={handleSaveEdit}
                 disabled={saving}
-                className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save'}
               </button>

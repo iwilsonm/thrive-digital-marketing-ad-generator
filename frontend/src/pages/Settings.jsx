@@ -244,7 +244,7 @@ function UserManagementCard({ currentUserId, currentUsername }) {
         </h2>
         <button
           onClick={() => setShowCreate(!showCreate)}
-          className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[11px] px-3 py-1.5"
+          className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[11px] px-3 py-1.5"
         >
           {showCreate ? 'Cancel' : '+ New User'}
         </button>
@@ -305,7 +305,7 @@ function UserManagementCard({ currentUserId, currentUsername }) {
               </select>
             </div>
           </div>
-          <button type="submit" disabled={creating} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[11px] px-4 py-1.5 disabled:opacity-50">
+          <button type="submit" disabled={creating} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[11px] px-4 py-1.5 disabled:opacity-50">
             {creating ? 'Creating...' : 'Create User'}
           </button>
         </form>
@@ -349,7 +349,7 @@ function UserManagementCard({ currentUserId, currentUsername }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => handleUpdate(rowUser.id)} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[10px] px-3 py-1">Save</button>
+                    <button onClick={() => handleUpdate(rowUser.id)} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[10px] px-3 py-1">Save</button>
                     <button onClick={() => setEditingId(null)} className="ed-ghost text-[10px] px-3 py-1">Cancel</button>
                   </div>
                 </div>
@@ -367,7 +367,7 @@ function UserManagementCard({ currentUserId, currentUsername }) {
                       className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent text-[12px] flex-1"
                       minLength={12}
                     />
-                    <button onClick={() => handleResetPassword(rowUser.id)} disabled={resettingPassword} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[10px] px-3 py-1 disabled:opacity-50">
+                    <button onClick={() => handleResetPassword(rowUser.id)} disabled={resettingPassword} className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[10px] px-3 py-1 disabled:opacity-50">
                       {resettingPassword ? 'Resetting...' : 'Reset Password'}
                     </button>
                     <button onClick={() => { setResetPasswordId(null); setNewPassword(''); }} className="ed-ghost text-[10px] px-3 py-1">Cancel</button>
@@ -757,7 +757,7 @@ export default function Settings() {
               <button
                 type="submit"
                 disabled={savingProfile}
-                className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
               >
                 {savingProfile ? 'Saving...' : 'Save Profile'}
               </button>
@@ -819,7 +819,7 @@ export default function Settings() {
                 minLength={12}
               />
             </div>
-            <button type="submit" className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors">
+            <button type="submit" className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors">
               Update Your Password
             </button>
           </form>
@@ -944,11 +944,11 @@ export default function Settings() {
             <details className="rounded-xl border border-ed-line bg-ed-bg/60 px-4 py-3">
               <summary className="cursor-pointer text-[13px] font-medium text-ed-ink">How to set up Meta API access</summary>
               <div className="mt-3 space-y-2 text-[12px] leading-relaxed text-ed-ink2">
-                <p>Create one Meta developer app for Creative Factory, then reuse it for every project connection.</p>
+                <p>Create one Meta developer app for Thrive Campaigns, then reuse it for every project connection.</p>
                 <ol className="list-decimal pl-4 space-y-1">
                   <li>Create or open a Meta app at <a className="underline" href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer">developers.facebook.com/apps</a>.</li>
                   <li>Add Facebook Login for Business and the Marketing API product if Meta prompts for products.</li>
-                  <li>In the app's OAuth settings, add this exact redirect URI: <code className="bg-cream px-1 rounded">https://creative-factory-software.vercel.app/api/meta/oauth/callback</code>.</li>
+                  <li>In the app's OAuth settings, add this exact redirect URI: <code className="bg-cream px-1 rounded">https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback</code>.</li>
                   <li>Save the app's App ID and App Secret below.</li>
                   <li>Inside each project, open Project Settings &rarr; Meta, connect your Meta account, then choose the ad account and Facebook Page.</li>
                 </ol>
@@ -975,7 +975,7 @@ export default function Settings() {
               </div>
               <p className="text-[11px] text-ed-ink3 mt-1">
                 Create a Facebook App at <a className="underline" href="https://developers.facebook.com" target="_blank" rel="noopener noreferrer">developers.facebook.com</a>.
-                Set redirect URI to <code className="bg-cream px-1 rounded">https://creative-factory-software.vercel.app/api/meta/oauth/callback</code>.
+                Set redirect URI to <code className="bg-cream px-1 rounded">https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback</code>.
                 Required for any project to connect its Meta ad account.
               </p>
             </div>
@@ -1085,7 +1085,7 @@ export default function Settings() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors"
+          className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors"
         >
           {saving ? 'Saving...' : 'Save Settings'}
         </button>

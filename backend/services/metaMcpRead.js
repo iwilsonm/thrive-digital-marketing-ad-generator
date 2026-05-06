@@ -108,7 +108,7 @@ async function runMcpRead({
   if (opts.campaignId) scopeLines.push(`- Campaign filter: ${opts.campaignId}`);
   if (opts.adsetId) scopeLines.push(`- Ad set filter: ${opts.adsetId}`);
 
-  const prompt = `Use the Meta Ads MCP server to read Meta ads data for Creative Factory.
+  const prompt = `Use the Meta Ads MCP server to read Meta ads data for Thrive Campaigns.
 
 Return ONLY a JSON object. Do not include prose or markdown.
 

@@ -107,8 +107,8 @@ const GenerationQueue = forwardRef(function GenerationQueue(
                         style={{
                           width: `${Math.max(gen.progress || 0, 2)}%`,
                           background: (gen.progress || 0) >= 100
-                            ? '#2A9D8F'
-                            : 'linear-gradient(90deg, #0B1D3A, #132B52)',
+                            ? '#38A638'
+                            : 'linear-gradient(90deg, #38A638, #2F8F2F)',
                         }}
                       />
                     </div>

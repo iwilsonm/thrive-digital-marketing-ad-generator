@@ -217,7 +217,7 @@ export default function DriveFolderPicker({ value, onChange, label }) {
                     <button
                       onClick={handleConfirm}
                       disabled={!selectedId}
-                      className="bg-ed-accent text-[#fbfaf6] px-3 py-1.5 rounded-xl text-sm font-medium hover:bg-ed-accent/90 disabled:opacity-50 transition-colors"
+                      className="bg-ed-accent text-white px-3 py-1.5 rounded-xl text-sm font-medium hover:bg-ed-accent/90 disabled:opacity-50 transition-colors"
                     >
                       Select Folder
                     </button>

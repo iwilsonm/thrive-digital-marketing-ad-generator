@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { pathFor, areaFor } from './chartUtils';
 
-export default function SparklineArea({ series, accent = '#a8543b', id = 'spark' }) {
+export default function SparklineArea({ series, accent = '#38a638', id = 'spark' }) {
   const w = 220, h = 48;
   const linePath = useMemo(() => pathFor(series, w, h, 4, 2), [series]);
   const areaPath = useMemo(() => areaFor(series, w, h, 4, 2), [series]);

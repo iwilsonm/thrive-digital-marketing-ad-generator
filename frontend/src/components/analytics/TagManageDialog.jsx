@@ -83,7 +83,7 @@ export default function TagManageDialog({ open, tags, onClose, onCreate, onUpdat
                     onChange={(e) => setDraftName(e.target.value)}
                     className="flex-1 text-[12px] px-2 py-1 border border-ed-line rounded"
                   />
-                  <button onClick={saveDraft} className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-[#fbfaf6] text-[11px] px-2 py-1">Save</button>
+                  <button onClick={saveDraft} className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-white text-[11px] px-2 py-1">Save</button>
                   <button onClick={() => setEditingId(null)} className="text-[11px] text-ed-ink2">Cancel</button>
                 </>
               ) : (
@@ -123,7 +123,7 @@ export default function TagManageDialog({ open, tags, onClose, onCreate, onUpdat
               placeholder="Tag name"
               className="flex-1 text-[12px] px-2 py-1 border border-ed-line rounded"
             />
-            <button onClick={saveDraft} className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-[#fbfaf6] text-[11px] px-2 py-1">Create</button>
+            <button onClick={saveDraft} className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-white text-[11px] px-2 py-1">Create</button>
             <button onClick={() => setCreating(false)} className="text-[11px] text-ed-ink2">Cancel</button>
           </div>
         )}

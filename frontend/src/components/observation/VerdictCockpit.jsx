@@ -1,8 +1,8 @@
 const TILES = [
-  { key: 'observing', label: 'Observing', color: '#c08a3e' },
-  { key: 'passed', label: 'Passed', color: '#3a8c5e' },
-  { key: 'failed', label: 'Failed', color: '#b25340' },
-  { key: 'insufficient', label: 'Insufficient', color: '#9a9a8e' },
+  { key: 'observing', label: 'Observing', color: '#62b462' },
+  { key: 'passed', label: 'Passed', color: '#38a638' },
+  { key: 'failed', label: 'Failed', color: '#ef4444' },
+  { key: 'insufficient', label: 'Insufficient', color: '#a3a3a3' },
 ];
 
 export default function VerdictCockpit({ counts, total, passRate }) {
@@ -40,7 +40,7 @@ export default function VerdictCockpit({ counts, total, passRate }) {
 
       <div
         className="rounded-lg flex justify-between items-center"
-        style={{ marginTop: 18, padding: '14px 16px', background: 'var(--ed-ink, #1d1c19)', color: 'var(--ed-surface, #fbfaf6)' }}
+        style={{ marginTop: 18, padding: '14px 16px', background: 'var(--ed-ink, #262626)', color: 'var(--ed-surface, #ffffff)' }}
       >
         <div>
           <div className="font-mono-ed uppercase" style={{ fontSize: 10.5, opacity: 0.6, letterSpacing: '0.1em', marginBottom: 3 }}>

@@ -16,7 +16,7 @@ function formatDateLabel(dateStr) {
 const SERVICES = [
   { key: 'openai',     label: 'OpenAI',     color: '#5B8DEF', hoverColor: '#4A7ADE', legendColor: 'bg-[#5B8DEF]',  tooltipColor: 'text-[#8BAFF5]' },
   { key: 'anthropic',  label: 'Anthropic',   color: '#7C6DCD', hoverColor: '#6B5CBC', legendColor: 'bg-[#7C6DCD]',  tooltipColor: 'text-[#9D91DA]' },
-  { key: 'gemini',     label: 'Gemini',      color: '#2A9D8F', hoverColor: '#238B7F', legendColor: 'bg-ed-green',        tooltipColor: 'text-ed-green' },
+  { key: 'gemini',     label: 'Gemini',      color: '#38A638', hoverColor: '#2F8F2F', legendColor: 'bg-ed-green',        tooltipColor: 'text-ed-green' },
 ];
 
 export default function CostBarChart({ data, loading, rangeLabel, historyRange, setHistoryRange, historyRanges, customStart, setCustomStart, customEnd, setCustomEnd }) {

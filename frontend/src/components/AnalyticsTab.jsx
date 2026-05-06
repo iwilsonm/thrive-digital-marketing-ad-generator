@@ -495,10 +495,10 @@ export default function AnalyticsTab({ projectId, project }) {
     const totalImpressions = filteredSortedRows.reduce((s, r) => s + numberValue(r.impressions), 0);
     const ts = charts.timeseries || [];
     return [
-      { label: `Spend · ${datePreset.replace('_', ' ').toUpperCase()}`, value: DOLLAR_FMT.format(totalSpend), series: ts.map(d => d.spend), accent: '#a8543b' },
-      { label: 'Avg ROAS', value: avgRoas.toFixed(2), series: ts.map(d => d.roas), accent: '#3a8c5e' },
-      { label: 'Avg CTR', value: (avgCtr / 100).toFixed(2) + '%', series: ts.map(d => d.ctr), accent: '#c08a3e' },
-      { label: 'Impressions', value: NUMBER_FMT.format(totalImpressions), series: ts.map(d => d.impressions), accent: '#a8543b' },
+      { label: `Spend · ${datePreset.replace('_', ' ').toUpperCase()}`, value: DOLLAR_FMT.format(totalSpend), series: ts.map(d => d.spend), accent: '#38a638' },
+      { label: 'Avg ROAS', value: avgRoas.toFixed(2), series: ts.map(d => d.roas), accent: '#38a638' },
+      { label: 'Avg CTR', value: (avgCtr / 100).toFixed(2) + '%', series: ts.map(d => d.ctr), accent: '#62b462' },
+      { label: 'Impressions', value: NUMBER_FMT.format(totalImpressions), series: ts.map(d => d.impressions), accent: '#38a638' },
     ];
   }, [filteredSortedRows, datePreset, charts.timeseries]);
 
@@ -939,7 +939,7 @@ export default function AnalyticsTab({ projectId, project }) {
                     toast.error(err.message || 'Could not switch read path');
                   }
                 }}
-                className="px-3 py-1.5 rounded-[7px] bg-ed-accent text-[#fbfaf6] text-[12px]"
+                className="px-3 py-1.5 rounded-[7px] bg-ed-accent text-white text-[12px]"
               >
                 Use API Reads
               </button>
@@ -1052,7 +1052,7 @@ export default function AnalyticsTab({ projectId, project }) {
                                 {row.name || '—'}
                               </button>
                               {row.cf_source && (
-                                <span title="Created via Creative Factory" className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent flex-shrink-0">CF</span>
+                                <span title="Created via Thrive Campaigns" className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent flex-shrink-0">TM</span>
                               )}
                             </div>
                           </td>
@@ -1471,7 +1471,7 @@ function BulkNoteModal({ open, selectedCount, onClose, onSubmit }) {
             className={`px-4 py-2 rounded-[7px] text-[12px] font-medium transition-colors disabled:opacity-50 ${
               mode === 'clear'
                 ? 'bg-ed-rust hover:bg-ed-rust/90 text-white'
-                : 'bg-ed-accent hover:bg-ed-accent/90 text-[#fbfaf6]'
+                : 'bg-ed-accent hover:bg-ed-accent/90 text-white'
             }`}
           >
             {busy ? 'Saving...' : title}

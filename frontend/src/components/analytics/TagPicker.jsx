@@ -136,7 +136,7 @@ export default function TagPicker({ allTags, appliedTagIds, onApply, onRemove, o
                   await onCreate({ name: newName.trim(), color: newColor });
                   setCreating(false); setNewName(''); setQuery('');
                 }}
-                className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-[#fbfaf6] text-[11px] px-2 py-1"
+                className="px-3 py-1.5 rounded-[6px] text-[11px] bg-ed-accent text-white text-[11px] px-2 py-1"
               >
                 Create + apply
               </button>

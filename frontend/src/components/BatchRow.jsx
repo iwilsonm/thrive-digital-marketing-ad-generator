@@ -418,7 +418,7 @@ export default function BatchRow({ batch, onRunNow, onCancel, onDelete, onEdit, 
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[11px] py-1 px-3"
+              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[11px] py-1 px-3"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>

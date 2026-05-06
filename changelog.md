@@ -1,4 +1,21 @@
-# Creative Factory — Changelog
+# Thrive Campaigns — Changelog
+
+## 2026-05-06 — Thrive Campaigns rebrand
+
+- Thrive Campaigns rebrand — green color theme, sidebar/login logos, user-visible wordmark; internal slugs unchanged.
+- Replaced customer-facing Thrive Digital Marketing brand copy with Thrive Campaigns in the app shell, login, settings, Meta connection copy, analytics labels, HTML title, and README.
+- Added new black/currentColor SVG assets for the sidebar mark, full sidebar/login wordmark, and SVG favicon.
+- Remapped the editorial color tokens and legacy Tailwind brand aliases from the prior navy/gold/rust theme to a green/neutral palette while preserving the existing layout and component structure.
+
+## 2026-05-06 — Thrive Convex Deployment Cutover + Identity Cleanup
+
+- Provisioned a new dedicated Thrive Digital Marketing Convex project and deployed the current schema/functions to its dev and production deployments.
+- Rebound local Convex env files to `https://impartial-shrimp-656.convex.cloud` / `dev:impartial-shrimp-656`.
+- Documented the Vercel production target as `https://cheery-cobra-258.convex.cloud` / `prod:cheery-cobra-258`.
+- Updated product identity from the source-product naming to Thrive Digital Marketing across package metadata, Convex system capabilities, health response, UI copy, docs, README, and local env comments.
+- Verified the new Thrive Convex deployment is empty across all schema tables and Convex file storage.
+- Completed Vercel production env cutover using the provided token: added `CONVEX_URL` for the new Thrive production Convex deployment, redeployed production, and reassigned `https://thrive-digital-marketing-ad-generat.vercel.app` to deployment `https://thrive-digital-marketing-ad-generat-ddnxndze3.vercel.app` at 2026-05-06 14:59 ICT.
+- Confirmed live `/login` starts from a clean setup state and live `/api/health` reports the new Thrive production Convex host. Creative Factory-side cleanup remains out of scope and is handled separately by Ian via the Convex dashboard.
 
 ## 2026-05-06 — Add reversible project archive flow
 

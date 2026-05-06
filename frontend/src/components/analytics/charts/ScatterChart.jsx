@@ -20,26 +20,26 @@ export default function ScatterChart({ rows }) {
   const yAt = (r) => padT + innerH * (1 - r / maxRoas);
 
   const statusColor = (status) => {
-    if (status === 'passed') return '#3a8c5e';
-    if (status === 'failed') return '#b25340';
-    if (status === 'observing') return '#a8543b';
-    return '#9a9a8e';
+    if (status === 'passed') return '#38a638';
+    if (status === 'failed') return '#ef4444';
+    if (status === 'observing') return '#38a638';
+    return '#a3a3a3';
   };
 
   return (
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} className="block">
       {[1, 2, 3, 4].filter(r => r <= maxRoas).map(r => (
         <g key={r}>
-          <line x1={padL} x2={w - padR} y1={yAt(r)} y2={yAt(r)} stroke={r === 2 ? '#a8543b' : '#e6e1d4'} strokeWidth="1" strokeDasharray={r === 2 ? '4 3' : '0'} opacity={r === 2 ? 0.6 : 1} />
-          <text x={padL - 10} y={yAt(r) + 4} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">{r}.0x</text>
+          <line x1={padL} x2={w - padR} y1={yAt(r)} y2={yAt(r)} stroke={r === 2 ? '#38a638' : '#ebebeb'} strokeWidth="1" strokeDasharray={r === 2 ? '4 3' : '0'} opacity={r === 2 ? 0.6 : 1} />
+          <text x={padL - 10} y={yAt(r) + 4} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">{r}.0x</text>
         </g>
       ))}
 
       {[0, 0.25, 0.5, 0.75, 1].map(t => (
-        <text key={t} x={padL + t * innerW} y={h - 14} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">{fmt$(maxSpend * t)}</text>
+        <text key={t} x={padL + t * innerW} y={h - 14} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">{fmt$(maxSpend * t)}</text>
       ))}
 
-      <text x={w - padR - 4} y={yAt(2) - 6} fill="#a8543b" fontSize="9.5" fontFamily="JetBrains Mono,monospace" textAnchor="end" className="uppercase tracking-[0.08em]">Bench 2.0x</text>
+      <text x={w - padR - 4} y={yAt(2) - 6} fill="#38a638" fontSize="9.5" fontFamily="JetBrains Mono,monospace" textAnchor="end" className="uppercase tracking-[0.08em]">Bench 2.0x</text>
 
       {rows.map((r, i) => {
         const radius = 5 + Math.min(r.ads || 3, 8);
@@ -49,8 +49,8 @@ export default function ScatterChart({ rows }) {
         );
       })}
 
-      <text x={padL} y={padT - 4} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" className="uppercase tracking-[0.08em]">ROAS</text>
-      <text x={w - padR} y={h - 2} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end" className="uppercase tracking-[0.08em]">Spend</text>
+      <text x={padL} y={padT - 4} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" className="uppercase tracking-[0.08em]">ROAS</text>
+      <text x={w - padR} y={h - 2} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end" className="uppercase tracking-[0.08em]">Spend</text>
     </svg>
   );
 }

@@ -247,7 +247,7 @@ export default defineSchema({
     angle_brief: v.optional(v.string()),           // JSON: structured angle brief for downstream use
     flex_ad_id: v.optional(v.string()),            // DEPRECATED — Phase 6 — drop in 6.1 (LP feature removed)
     // LP auto-generation tracking
-    // DEPRECATED — Phase 6 — drop in 6.1 (LP feature removed from Creative Factory)
+    // DEPRECATED — Phase 6 — drop in 6.1 (LP feature removed from this Thrive fork)
     lp_primary_id: v.optional(v.string()),
     lp_primary_url: v.optional(v.string()),
     lp_primary_status: v.optional(v.string()),
@@ -734,7 +734,7 @@ export default defineSchema({
     .index("by_project_and_entity", ["project_id", "entity_type"]),
 
   // Project-scoped plain-text notes for Meta-side analytics entities and
-  // Creative Factory local entities. Notes are intentionally independent from
+  // Thrive Digital Marketing local entities. Notes are intentionally independent from
   // tag assignments so they can be edited/bulk-appended without touching tags.
   entity_notes: defineTable({
     externalId: v.string(),

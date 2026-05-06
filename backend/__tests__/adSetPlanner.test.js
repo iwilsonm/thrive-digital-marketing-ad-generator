@@ -108,9 +108,9 @@ describe('manual ad set planning helpers', () => {
     const err = new Error("[Request ID: abc] Server Error Could not find public function for 'adSets:createFromDeployments'. Did you forget to run `npx convex dev`?");
 
     expect(isMissingAtomicAdSetFunctionError(err)).toBe(true);
-    expect(getManualCombineErrorResponse(err, { convexHost: 'elated-mastiff-709.convex.cloud' })).toEqual({
+    expect(getManualCombineErrorResponse(err, { convexHost: 'impartial-shrimp-656.convex.cloud' })).toEqual({
       status: 503,
-      message: 'Ad set creation is temporarily unavailable because the configured Convex deployment (elated-mastiff-709.convex.cloud) is missing the atomic ad-set combine function. Please deploy Convex functions to the same deployment this site is using, then try again.',
+      message: 'Ad set creation is temporarily unavailable because the configured Convex deployment (impartial-shrimp-656.convex.cloud) is missing the atomic ad-set combine function. Please deploy Convex functions to the same deployment this site is using, then try again.',
     });
   });
 

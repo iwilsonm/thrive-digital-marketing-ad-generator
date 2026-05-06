@@ -1,6 +1,6 @@
 import { fmtCompact } from './chartUtils';
 
-const COLORS = ['#a8543b', '#b86b51', '#c98266', '#d99a7b', '#e9b291'];
+const COLORS = ['#38a638', '#4dae4d', '#62b462', '#8dcc8d', '#b8e4b8'];
 
 export default function FunnelChart({ stages }) {
   if (!stages || stages.length === 0) return null;
@@ -21,19 +21,19 @@ export default function FunnelChart({ stages }) {
         return (
           <g key={s.stage}>
             <rect x={cx - barW / 2} y={y} width={barW} height={barH} fill={COLORS[i % COLORS.length]} rx="2" />
-            <text x={cx} y={y - 8} fill="#1d1c19" fontSize="14" fontFamily="'Source Serif 4',Georgia,serif" textAnchor="middle">
+            <text x={cx} y={y - 8} fill="#262626" fontSize="14" fontFamily="'Source Serif 4',Georgia,serif" textAnchor="middle">
               {fmtCompact(s.value)}
             </text>
-            <text x={cx} y={h - 30} fill="#1d1c19" fontSize="11.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle" className="uppercase tracking-[0.04em]">
+            <text x={cx} y={h - 30} fill="#262626" fontSize="11.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle" className="uppercase tracking-[0.04em]">
               {s.stage}
             </text>
             {s.rate !== null && s.rate !== undefined && (
-              <text x={cx} y={h - 12} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
+              <text x={cx} y={h - 12} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
                 {(s.rate * 100).toFixed(2)}%
               </text>
             )}
             {i < stages.length - 1 && (
-              <text x={cx + stepX / 2} y={padT + innerH / 2 + 4} fill="#bcb8ab" fontSize="14" fontFamily="JetBrains Mono,monospace" textAnchor="middle">→</text>
+              <text x={cx + stepX / 2} y={padT + innerH / 2 + 4} fill="#a3a3a3" fontSize="14" fontFamily="JetBrains Mono,monospace" textAnchor="middle">→</text>
             )}
           </g>
         );

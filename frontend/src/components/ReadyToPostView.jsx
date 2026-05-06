@@ -1731,7 +1731,7 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
   const PostInSection = ({ campaignName, adSetName, duplicateAdSetName, adName, cardKey, onEdit, editContent }) => {
     if (!campaignName && !adSetName) {
       return (
-        <div className="bg-[rgba(168,84,59,0.06)] border-2 border-ed-accent/30 rounded-xl p-4">
+        <div className="bg-[rgba(56,166,56,0.06)] border-2 border-ed-accent/30 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <svg className="w-5 h-5 text-ed-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -1794,10 +1794,10 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
         setCopiedItems(prev => new Set(prev).add(itemKey));
       };
       return (
-        <div className={`border-2 rounded-xl p-4 transition-all duration-300 ${isCopied ? 'border-ed-green/25 bg-ed-green/5' : 'border-ed-accent/25 bg-[rgba(168,84,59,0.06)]'}`}>
+        <div className={`border-2 rounded-xl p-4 transition-all duration-300 ${isCopied ? 'border-ed-green/25 bg-ed-green/5' : 'border-ed-accent/25 bg-[rgba(56,166,56,0.06)]'}`}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest mb-1 transition-colors duration-300 ${isCopied ? 'bg-ed-green/15 text-ed-green' : 'bg-[rgba(168,84,59,0.12)] text-ed-accent'}`}>Website URL</span>
+              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest mb-1 transition-colors duration-300 ${isCopied ? 'bg-ed-green/15 text-ed-green' : 'bg-[rgba(56,166,56,0.12)] text-ed-accent'}`}>Website URL</span>
               <p className="text-[11px] text-ed-ink2 mb-2">Paste this into the <strong>"Website URL"</strong> field in Ads Manager.</p>
               <div className={`bg-white rounded-lg px-3 py-2 border transition-all duration-300 ${isCopied ? 'border-ed-green/20' : 'border-ed-accent/20'}`}>
                 <a href={url} target="_blank" rel="noopener noreferrer"
@@ -1824,8 +1824,8 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
     // Multiple URLs mode (gauntlet + legacy + PDP)
     const anyCopied = urls.some((_, i) => copiedItems.has(`${cardKey}-url-${i}`));
     return (
-      <div className={`border-2 rounded-xl p-4 transition-all duration-300 ${anyCopied ? 'border-ed-green/25 bg-ed-green/5' : 'border-ed-accent/25 bg-[rgba(168,84,59,0.06)]'}`}>
-        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest mb-1 transition-colors duration-300 ${anyCopied ? 'bg-ed-green/15 text-ed-green' : 'bg-[rgba(168,84,59,0.12)] text-ed-accent'}`}>Website URL</span>
+      <div className={`border-2 rounded-xl p-4 transition-all duration-300 ${anyCopied ? 'border-ed-green/25 bg-ed-green/5' : 'border-ed-accent/25 bg-[rgba(56,166,56,0.06)]'}`}>
+        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest mb-1 transition-colors duration-300 ${anyCopied ? 'bg-ed-green/15 text-ed-green' : 'bg-[rgba(56,166,56,0.12)] text-ed-accent'}`}>Website URL</span>
         <p className="text-[11px] text-ed-ink2 mb-2">Paste into the <strong>"Website URL"</strong> field in Ads Manager.</p>
         <div className="space-y-1.5">
           {urls.map((entry, i) => {
@@ -1995,9 +1995,9 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
     const headlineKey = isFlex ? 'headlines' : 'ad_headlines';
 
     return (
-      <div className="border-2 border-ed-accent/30 bg-[rgba(168,84,59,0.06)] rounded-xl p-4 space-y-3">
+      <div className="border-2 border-ed-accent/30 bg-[rgba(56,166,56,0.06)] rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[rgba(168,84,59,0.12)] text-ed-accent text-[10px] font-bold uppercase tracking-widest">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[rgba(56,166,56,0.12)] text-ed-accent text-[10px] font-bold uppercase tracking-widest">
             <EditPencilIcon /> Edit Ad Details
           </span>
           <div className="flex items-center gap-2">
@@ -2416,7 +2416,7 @@ export default function ReadyToPostView({ projectId, deployments, setDeployments
                 {someSelected && (
                   <button onClick={() => { const selectedDeps = childDeps.filter(d => selected.has(d.id)); downloadMultipleImages(selectedDeps, `selected-${cardKey}`); }}
                     disabled={isDownloadingSelected}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[rgba(168,84,59,0.06)] text-ed-accent text-[11px] font-bold hover:bg-[rgba(168,84,59,0.12)] transition-colors disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[rgba(56,166,56,0.06)] text-ed-accent text-[11px] font-bold hover:bg-[rgba(56,166,56,0.12)] transition-colors disabled:opacity-50"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

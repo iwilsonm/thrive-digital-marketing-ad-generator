@@ -2587,7 +2587,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
             data-testid="director-test-run-button"
             onClick={handleTestRun}
             disabled={!canTriggerTestRun}
-            className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors flex items-center gap-1 disabled:opacity-50"
+            className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors flex items-center gap-1 disabled:opacity-50"
             title={!selectedAngleId ? 'Select a test angle first.' : `Create a test ad set with ${testAdSetTargetValue} approved ads.`}
           >
             {activeRun ? <><Spinner /> {queuedCount > 0 ? `Running (${queuedCount} queued)` : 'Running...'}</> : queuedCount > 0 ? `Queue Run (${queuedCount} queued)` : 'Test Run'}
@@ -2896,7 +2896,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
                   )}
                   <div className="flex gap-2">
                     {importResult.newAngles.length > 0 && (
-                      <button onClick={handleConfirmImport} disabled={importing} className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50">
+                      <button onClick={handleConfirmImport} disabled={importing} className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50">
                         {importing ? 'Importing...' : `Import ${importResult.newAngles.length} Angle${importResult.newAngles.length !== 1 ? 's' : ''}`}
                       </button>
                     )}
@@ -3005,7 +3005,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
               </div>
               <textarea placeholder="Prompt hints — additional creative direction (optional)" value={newAngle.prompt_hints} onChange={e => setNewAngle(prev => ({ ...prev, prompt_hints: e.target.value }))} className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent w-full mb-3 text-[12px] h-14 resize-none" />
               <div className="flex gap-2">
-                <button onClick={handleAddAngle} className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors">Save Angle</button>
+                <button onClick={handleAddAngle} className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors">Save Angle</button>
                 <button onClick={() => setShowAddAngle(false)} className="ed-ghost text-[11px] px-3 py-1.5">Cancel</button>
               </div>
             </div>
@@ -3881,7 +3881,7 @@ function FilterPanel({ data, onRefresh, externalProjectId, externalProject, onPr
         <button
           onClick={handleRunLive}
           disabled={!!runningAction}
-          className="px-2.5 py-1 rounded-[7px] text-[11px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors flex items-center gap-1 disabled:opacity-50"
+          className="px-2.5 py-1 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors flex items-center gap-1 disabled:opacity-50"
         >
           {runningAction === 'live' ? <><Spinner /> Running...</> : <>{'\u25B6'} Run Now</>}
         </button>

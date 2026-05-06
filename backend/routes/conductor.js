@@ -377,11 +377,11 @@ router.get('/run-batch-lp/:projectId/:batchId', async (req, res) => {
       return res.status(404).json({ error: 'Batch not found' });
     }
 
-    // Phase 6 — LP Agent removed from Creative Factory entirely.
+    // Phase 6 — LP Agent removed from this fork entirely.
     // landing_pages table no longer used; this endpoint returns empty pages
     // and a static unavailable reason for any frontend that still queries it.
     const landingPages = [];
-    const lpUnavailableReason = 'Landing page generation is not available in Creative Factory.';
+    const lpUnavailableReason = 'Landing page generation is not available in Thrive Campaigns.';
     const mappedPages = landingPages.map((page) => {
       const qaReport = safeParseJSON(page.qa_report, {});
       const smokeReport = safeParseJSON(page.smoke_test_report, {});

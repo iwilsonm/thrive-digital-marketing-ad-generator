@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { fmt$ } from './chartUtils';
 
-const DEFAULT_COLORS = ['#a8543b', '#b86b51', '#c98266', '#d99a7b', '#e9b291', '#8a8678', '#5a574f'];
+const DEFAULT_COLORS = ['#38a638', '#4dae4d', '#62b462', '#8dcc8d', '#b8e4b8', '#a3a3a3', '#737373'];
 
 export default function StackedBarChart({ data, keys, colors = DEFAULT_COLORS, campaignNames = {} }) {
   const w = 880, h = 240, padL = 48, padR = 16, padT = 18, padB = 32;
@@ -28,8 +28,8 @@ export default function StackedBarChart({ data, keys, colors = DEFAULT_COLORS, c
       <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} className="block">
         {grid.map((g, i) => (
           <g key={i}>
-            <line x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="#e6e1d4" strokeWidth="1" />
-            <text x={padL - 10} y={g.y + 4} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">{g.label}</text>
+            <line x1={padL} x2={w - padR} y1={g.y} y2={g.y} stroke="#ebebeb" strokeWidth="1" />
+            <text x={padL - 10} y={g.y + 4} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">{g.label}</text>
           </g>
         ))}
         {data.map((d, i) => {
@@ -44,7 +44,7 @@ export default function StackedBarChart({ data, keys, colors = DEFAULT_COLORS, c
                 cumY = y;
                 return <rect key={k} x={cx - barW / 2} y={y} width={barW} height={Math.max(segH - 1, 0)} fill={colors[ki % colors.length]} rx="1" />;
               })}
-              <text x={cx} y={h - 12} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
+              <text x={cx} y={h - 12} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
                 {d.date?.slice(5) || ''}
               </text>
             </g>

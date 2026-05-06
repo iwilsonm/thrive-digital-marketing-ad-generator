@@ -1246,7 +1246,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
           inStaging ? 'cursor-pointer' : ''
         } ${
           isDragging ? 'opacity-40 border-ed-accent/30 bg-ed-accent/5' :
-          isSelected ? 'border-ed-accent/40 bg-[rgba(168,84,59,0.06)]' :
+          isSelected ? 'border-ed-accent/40 bg-[rgba(56,166,56,0.06)]' :
           'border-ed-line bg-ed-surface hover:border-ed-accent/20'
         }`}
       >
@@ -1385,7 +1385,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
         key={flexAd.id}
         className={`relative group rounded-xl border transition-all overflow-hidden ${
           isDropTarget ? 'border-ed-accent bg-ed-accent/10 ring-2 ring-ed-accent/30' :
-          isSelected ? 'border-ed-accent/40 bg-[rgba(168,84,59,0.06)]' : 'border-ed-line bg-ed-surface hover:border-ed-accent/20'
+          isSelected ? 'border-ed-accent/40 bg-[rgba(56,166,56,0.06)]' : 'border-ed-line bg-ed-surface hover:border-ed-accent/20'
         }`}
         onDragOver={(e) => {
           e.preventDefault();
@@ -1563,7 +1563,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
                       onDragEnd={handleDragEnd}
                       onClick={(e) => { e.stopPropagation(); openSidebar({ type: 'single', deployment: d, ad: d.ad }); }}
                       className={`w-full flex items-center gap-2.5 p-2 rounded-lg border bg-ed-surface hover:border-ed-accent/20 transition-all text-left cursor-grab active:cursor-grabbing ${
-                        isChildSelected ? 'border-ed-accent/40 bg-[rgba(168,84,59,0.06)]' : 'border-ed-line'
+                        isChildSelected ? 'border-ed-accent/40 bg-[rgba(56,166,56,0.06)]' : 'border-ed-line'
                       }`}
                     >
                       <button
@@ -1645,7 +1645,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
               <button
                 onClick={() => handleSaveSidebar({ closeAfter: true })}
                 disabled={sidebarSaving}
-                className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
               >
                 {sidebarSaving ? 'Saving...' : 'Save & Close'}
               </button>
@@ -1739,7 +1739,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
                   </svg>
                   <span className="text-[11px] font-serif text-ed-ink uppercase tracking-wider">Primary Text</span>
                   {primaryTextThread.length > 2 && (
-                    <span className="text-[9px] text-ed-accent font-medium bg-[rgba(168,84,59,0.06)] px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] text-ed-accent font-medium bg-[rgba(56,166,56,0.06)] px-1.5 py-0.5 rounded-full">
                       Round {Math.floor(primaryTextThread.length / 2)}
                     </span>
                   )}
@@ -1804,7 +1804,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
                     <button
                       onClick={handleGeneratePrimaryText}
                       disabled={generatingPrimaryText}
-                      className="mt-2 w-full py-2 rounded-[7px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1.5 text-[11px] font-medium"
+                      className="mt-2 w-full py-2 rounded-[7px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-1.5 text-[11px] font-medium"
                     >
                       {generatingPrimaryText ? (
                         <>
@@ -1951,7 +1951,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
             <button
               onClick={() => handleSaveSidebar({ closeAfter: true })}
               disabled={sidebarSaving}
-              className="px-5 py-2 rounded-[7px] text-[12px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
+              className="px-5 py-2 rounded-[7px] text-[12px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50"
             >
               {sidebarSaving ? 'Saving...' : 'Save & Close'}
             </button>
@@ -1989,7 +1989,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
         {/* ─── Left Column: Queue ─── */}
         <div
           className={`w-[300px] flex-shrink-0 sticky top-4 ed-card p-4 transition-all max-h-[calc(100vh-120px)] flex flex-col ${
-            dropTarget === 'unplanned' ? 'ring-2 ring-ed-accent bg-[rgba(168,84,59,0.06)]' : ''
+            dropTarget === 'unplanned' ? 'ring-2 ring-ed-accent bg-[rgba(56,166,56,0.06)]' : ''
           }`}
           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget('unplanned'); }}
           onDragLeave={handleDragLeave}
@@ -2073,7 +2073,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
         {/* ─── Right Column: Planner ─── */}
         <div
           className={`flex-1 min-w-0 ed-card p-4 transition-all ${
-            dropTarget === 'staging' ? 'ring-2 ring-ed-accent bg-[rgba(168,84,59,0.06)]' : ''
+            dropTarget === 'staging' ? 'ring-2 ring-ed-accent bg-[rgba(56,166,56,0.06)]' : ''
           }`}
           onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget('staging'); }}
           onDragLeave={handleDragLeave}
@@ -2177,7 +2177,7 @@ export default function CampaignsView({ projectId, deployments, setDeployments, 
                     setCombineModalOpen(true);
                   }}
                   disabled={combiningFlex}
-                  className="px-2 py-1 rounded-[7px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors inline-flex items-center gap-1 disabled:opacity-50"
+                  className="px-2 py-1 rounded-[7px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors inline-flex items-center gap-1 disabled:opacity-50"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z" />

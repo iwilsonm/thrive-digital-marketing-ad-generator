@@ -294,7 +294,7 @@ async function renderUrlWithBrowser(urlString, { timeoutMs = 20_000 } = {}) {
 
     browser = await chromiumLauncher.launch(launchOptions);
     const context = await browser.newContext({
-      userAgent: 'DaciaAutomationBot/1.0 (+https://creative-factory-software.vercel.app)',
+      userAgent: 'ThriveDigitalMarketingBot/1.0 (+https://thrive-digital-marketing-ad-generat.vercel.app)',
     });
     const page = await context.newPage();
 
@@ -387,7 +387,7 @@ export async function fetchUrlText(
       redirect: 'follow',
       signal: controller.signal,
       headers: {
-        'user-agent': 'DaciaAutomationBot/1.0 (+https://creative-factory-software.vercel.app)',
+        'user-agent': 'ThriveDigitalMarketingBot/1.0 (+https://thrive-digital-marketing-ad-generat.vercel.app)',
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.85,text/plain;q=0.8,*/*;q=0.5',
       },
     });

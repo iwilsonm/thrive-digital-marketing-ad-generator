@@ -407,7 +407,7 @@ try {
 
   if (!process.env.VERCEL) {
     app.listen(PORT, () => {
-      console.log(`Creative Factory backend running on port ${PORT}`);
+      console.log(`Thrive Digital Marketing backend running on port ${PORT}`);
     });
   }
 } catch (err) {

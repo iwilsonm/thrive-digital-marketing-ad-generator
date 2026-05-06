@@ -265,7 +265,7 @@ export default function ProjectSetup() {
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors"
+              className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors"
             >
               {loading ? 'Creating...' : 'Create Project'}
             </button>

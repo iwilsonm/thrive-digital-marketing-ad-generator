@@ -42,37 +42,37 @@ export default function PassRateChart({ data }) {
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
         <defs>
           <linearGradient id="obs-pass-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3a8c5e" stopOpacity="0.22" />
-            <stop offset="100%" stopColor="#3a8c5e" stopOpacity="0" />
+            <stop offset="0%" stopColor="#38a638" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#38a638" stopOpacity="0" />
           </linearGradient>
         </defs>
         {GRID.map((g, i) => (
           <g key={i}>
             <line
               x1={PAD_L} x2={W - PAD_R} y1={g.y} y2={g.y}
-              stroke={i === 2 ? '#a8543b' : '#e6e1d4'}
+              stroke={i === 2 ? '#38a638' : '#ebebeb'}
               strokeWidth="1"
               strokeDasharray={i === 2 ? '3 3' : '0'}
               opacity={i === 2 ? 0.5 : 1}
             />
-            <text x={PAD_L - 10} y={g.y + 4} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">
+            <text x={PAD_L - 10} y={g.y + 4} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="end">
               {g.label}
             </text>
           </g>
         ))}
         <path d={areaPath} fill="url(#obs-pass-area)" />
-        <path d={linePath} fill="none" stroke="#3a8c5e" strokeWidth="1.8" />
+        <path d={linePath} fill="none" stroke="#38a638" strokeWidth="1.8" />
         {data.map((d, i) => (
           <g key={i}>
-            <circle cx={xAt(i)} cy={yAt(rates[i])} r="3.5" fill="#3a8c5e" stroke="#fbfaf6" strokeWidth="1.5" />
-            <text x={xAt(i)} y={H - 12} fill="#8a8678" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
+            <circle cx={xAt(i)} cy={yAt(rates[i])} r="3.5" fill="#38a638" stroke="#ffffff" strokeWidth="1.5" />
+            <text x={xAt(i)} y={H - 12} fill="#a3a3a3" fontSize="10.5" fontFamily="JetBrains Mono,monospace" textAnchor="middle">
               {d.week}
             </text>
           </g>
         ))}
         <text
           x={W - PAD_R} y={PAD_T - 6}
-          fill="#8a8678" fontSize="9.5" fontFamily="JetBrains Mono,monospace"
+          fill="#a3a3a3" fontSize="9.5" fontFamily="JetBrains Mono,monospace"
           textAnchor="end" letterSpacing="0.06em"
           style={{ textTransform: 'uppercase' }}
         >

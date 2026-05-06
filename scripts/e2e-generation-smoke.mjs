@@ -3,10 +3,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const BASE_URL = process.env.BASE_URL || 'https://creative-factory-software.vercel.app';
+const BASE_URL = process.env.BASE_URL || 'https://thrive-digital-marketing-ad-generat.vercel.app';
 const PROJECT_ID = process.env.PROJECT_ID || '4f8aed31-c2ac-4dca-8dc6-233838d9a069';
-const USERNAME = process.env.CF_USERNAME || 'admin';
-const PASSWORD = process.env.CF_PASSWORD || '';
+const USERNAME = process.env.THRIVE_USERNAME || process.env.CF_USERNAME || 'admin';
+const PASSWORD = process.env.THRIVE_PASSWORD || process.env.CF_PASSWORD || '';
 const HEADLESS = process.env.HEADLESS !== '0';
 const RUN_FULL_MATRIX = process.env.LIVE_MATRIX !== 'quick';
 const RUN_SINGLES = process.env.RUN_SINGLES !== '0';
@@ -19,7 +19,7 @@ const BATCH_TIMEOUT_MS = Number(process.env.BATCH_TIMEOUT_MS || 20 * 60 * 1000);
 const DIRECTOR_TIMEOUT_MS = Number(process.env.DIRECTOR_TIMEOUT_MS || 45 * 60 * 1000);
 
 if (!PASSWORD) {
-  console.error('Set CF_PASSWORD before running the smoke harness.');
+  console.error('Set THRIVE_PASSWORD before running the smoke harness.');
   process.exit(1);
 }
 

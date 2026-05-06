@@ -480,7 +480,7 @@ export default function TemplateImages({ projectId }) {
                         <button
                           onClick={() => handleSaveDesc(tmpl.id)}
                           disabled={savingDescId === tmpl.id}
-                          className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-[#fbfaf6] hover:bg-ed-accent/90 transition-colors text-[11px] px-3 py-1 disabled:opacity-50"
+                          className="px-4 py-2 rounded-[7px] text-[13px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors text-[11px] px-3 py-1 disabled:opacity-50"
                         >
                           {savingDescId === tmpl.id ? 'Saving...' : 'Save'}
                         </button>

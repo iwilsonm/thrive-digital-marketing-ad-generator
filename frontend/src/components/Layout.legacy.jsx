@@ -60,7 +60,7 @@ export default function Layout({ children }) {
           <div className="flex justify-between h-14">
             <div className="flex items-center gap-8">
               <Link to={user?.role === 'poster' ? '/projects' : '/'} className="flex items-center">
-                <img src="/logo.png" alt="Creative Factory" className="h-11" />
+                <img src="/logo-full.svg" alt="Thrive Campaigns" className="h-10" />
               </Link>
               <div className="segmented-control hidden md:inline-flex">
                 {navLinks.map(link => {
