@@ -1,5 +1,10 @@
 # Thrive Campaigns — Changelog
 
+## 2026-05-06 — Settings API key test routes accept pasted keys
+
+- Settings test routes (openai/gemini/openai-image/test-model) accept `api_key` in the request body, matching the Anthropic pattern.
+- Fixes "key not configured" false positives caused by per-instance settings cache staleness on serverless.
+
 ## 2026-05-06 — Drop manual research PDF attachment guidance
 
 - Drop PDF-attachment guidance from manual research walkthrough Step 1; product description is now in the prompt body itself.

@@ -559,10 +559,13 @@ export default function Settings() {
     setTestResults(prev => ({ ...prev, [service]: 'testing...' }));
     try {
       let result;
-      if (service === 'openai') result = await api.testOpenAI();
-      else if (service === 'openai_image') result = await api.testOpenAIImage('gpt-image-2');
-      else if (service === 'gemini') result = await api.testGemini();
-      else if (service === 'anthropic') {
+      if (service === 'openai') {
+        result = await api.testOpenAI(form.openai_api_key.trim());
+      } else if (service === 'openai_image') {
+        result = await api.testOpenAIImage('gpt-image-2', form.openai_api_key.trim());
+      } else if (service === 'gemini') {
+        result = await api.testGemini(form.gemini_api_key.trim());
+      } else if (service === 'anthropic') {
         const candidateKey = form.anthropic_api_key.trim();
         result = await api.testAnthropic(candidateKey);
         if (candidateKey) {

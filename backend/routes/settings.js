@@ -131,7 +131,8 @@ router.delete('/:key', async (req, res) => {
 
 // Test OpenAI connection
 router.post('/test-openai', async (req, res) => {
-  const apiKey = await getSetting('openai_api_key');
+  const candidateKey = typeof req.body?.api_key === 'string' ? req.body.api_key.trim() : '';
+  const apiKey = candidateKey || await getSetting('openai_api_key');
   if (!apiKey) return res.status(400).json({ error: 'OpenAI API key not configured' });
 
   try {
@@ -153,7 +154,8 @@ router.post('/test-openai', async (req, res) => {
 router.post('/test-openai-image', async (req, res) => {
   const requestedModel = typeof req.body?.model === 'string' ? req.body.model.trim() : '';
   const model = requestedModel || DEFAULT_OPENAI_IMAGE_MODEL;
-  const apiKey = await getSetting('openai_api_key');
+  const candidateKey = typeof req.body?.api_key === 'string' ? req.body.api_key.trim() : '';
+  const apiKey = candidateKey || await getSetting('openai_api_key');
   const result = await testOpenAIImageAccess({ apiKey, model });
   res.json(result);
 });
@@ -166,7 +168,8 @@ router.post('/test-model', async (req, res) => {
   if (!model || typeof model !== 'string') {
     return res.status(400).json({ error: 'model (string) required in body' });
   }
-  const apiKey = await getSetting('openai_api_key');
+  const candidateKey = typeof req.body?.api_key === 'string' ? req.body.api_key.trim() : '';
+  const apiKey = candidateKey || await getSetting('openai_api_key');
   if (!apiKey) return res.status(400).json({ error: 'OpenAI API key not configured' });
 
   try {
@@ -208,7 +211,8 @@ router.post('/test-model', async (req, res) => {
 
 // Test Gemini connection
 router.post('/test-gemini', async (req, res) => {
-  const apiKey = await getSetting('gemini_api_key');
+  const candidateKey = typeof req.body?.api_key === 'string' ? req.body.api_key.trim() : '';
+  const apiKey = candidateKey || await getSetting('gemini_api_key');
   if (!apiKey) return res.status(400).json({ error: 'Gemini API key not configured' });
 
   try {

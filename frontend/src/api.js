@@ -451,18 +451,26 @@ export const api = {
   getSettings: () => request('/settings'),
   updateSettings: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   deleteSetting: (key) => request(`/settings/${encodeURIComponent(key)}`, { method: 'DELETE' }),
-  testOpenAI: () => request('/settings/test-openai', { method: 'POST' }),
-  testOpenAIImage: (model = 'gpt-image-2') =>
+  testOpenAI: (apiKey = '') =>
+    request('/settings/test-openai', {
+      method: 'POST',
+      ...(apiKey ? { body: JSON.stringify({ api_key: apiKey }) } : {}),
+    }),
+  testOpenAIImage: (model = 'gpt-image-2', apiKey = '') =>
     request('/settings/test-openai-image', {
       method: 'POST',
-      body: JSON.stringify({ model }),
+      body: JSON.stringify(apiKey ? { model, api_key: apiKey } : { model }),
     }),
-  testGemini: () => request('/settings/test-gemini', { method: 'POST' }),
+  testGemini: (apiKey = '') =>
+    request('/settings/test-gemini', {
+      method: 'POST',
+      ...(apiKey ? { body: JSON.stringify({ api_key: apiKey }) } : {}),
+    }),
   // Phase 2 (PEF item G) — verify a specific OpenAI chat model is available.
-  testOpenAIModel: (model) =>
+  testOpenAIModel: (model, apiKey = '') =>
     request('/settings/test-model', {
       method: 'POST',
-      body: JSON.stringify({ model }),
+      body: JSON.stringify(apiKey ? { model, api_key: apiKey } : { model }),
       headers: { 'Content-Type': 'application/json' },
     }),
   testDrive: () => request('/settings/test-drive', { method: 'POST' }),
