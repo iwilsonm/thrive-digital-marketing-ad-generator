@@ -1,5 +1,11 @@
 # Thrive Campaigns — Changelog
 
+## 2026-05-06 — Restore project sales_page_content persistence
+
+- Restore `sales_page_content` persistence on projects table — fixes deep research input gap. Schema + mapper + whitelist + POST handler updated. Convex prod deployed.
+- Added `sales_page_content` back to the Convex `projects` table as an optional string and allowed it through project create/update paths.
+- Returned `sales_page_content` from the backend project mapper so document generation can receive the user's detailed product/offering description.
+
 ## 2026-05-06 — ProjectSetup product input simplified
 
 - ProjectSetup product input switched from PDF/paste sales page to free-form product description textarea; prompt1 intro updated; downstream pipeline unchanged.

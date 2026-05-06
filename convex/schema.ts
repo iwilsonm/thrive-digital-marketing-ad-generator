@@ -33,6 +33,7 @@ export default defineSchema({
     brand_name: v.optional(v.string()),
     niche: v.optional(v.string()),
     product_description: v.optional(v.string()),
+    sales_page_content: v.optional(v.string()),
     drive_folder_id: v.optional(v.string()),
     inspiration_folder_id: v.optional(v.string()),
     prompt_guidelines: v.optional(v.string()),

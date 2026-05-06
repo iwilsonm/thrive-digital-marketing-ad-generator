@@ -182,13 +182,14 @@ export async function getSystemCapabilities() {
 // Project helpers
 // =============================================
 
-export async function createProject({ id, name, brand_name, niche, product_description, drive_folder_id, inspiration_folder_id }) {
+export async function createProject({ id, name, brand_name, niche, product_description, sales_page_content, drive_folder_id, inspiration_folder_id }) {
   await mutationWithRetry(api.projects.create, {
     externalId: id,
     name,
     brand_name: brand_name || '',
     niche: niche || '',
     product_description: product_description || '',
+    sales_page_content: sales_page_content || '',
     drive_folder_id: drive_folder_id || '',
     inspiration_folder_id: inspiration_folder_id || '',
   });
@@ -252,7 +253,7 @@ export async function getAllProjectsWithStats() {
 // them; the Filter service uses internal constants in creativeFilterService.js.
 // Do not re-add without a real consumer.
 export async function updateProject(id, fields) {
-  const allowed = ['name', 'brand_name', 'niche', 'product_description', 'drive_folder_id', 'inspiration_folder_id', 'prompt_guidelines', 'status', 'template_seeding_status', 'template_seeding_error', 'archived_at', 'scout_enabled', 'scout_default_campaign', 'scout_cta', 'scout_display_link', 'scout_facebook_page', 'scout_daily_flex_ads', 'scout_destination_url', 'scout_destination_urls', 'scout_duplicate_adset_name',
+  const allowed = ['name', 'brand_name', 'niche', 'product_description', 'sales_page_content', 'drive_folder_id', 'inspiration_folder_id', 'prompt_guidelines', 'status', 'template_seeding_status', 'template_seeding_error', 'archived_at', 'scout_enabled', 'scout_default_campaign', 'scout_cta', 'scout_display_link', 'scout_facebook_page', 'scout_daily_flex_ads', 'scout_destination_url', 'scout_destination_urls', 'scout_duplicate_adset_name',
     // Phase 1 — Staging Page + Director cycle config
     'default_campaign_id', 'adset_default_template', 'ad_sets_per_cycle', 'ads_per_ad_set',
     // Phase 2A — Meta integration
@@ -335,6 +336,7 @@ function convexProjectToRow(p) {
     brand_name: p.brand_name || '',
     niche: p.niche || '',
     product_description: p.product_description || '',
+    sales_page_content: p.sales_page_content || '',
     drive_folder_id: p.drive_folder_id || '',
     inspiration_folder_id: p.inspiration_folder_id || '',
     prompt_guidelines: p.prompt_guidelines || '',

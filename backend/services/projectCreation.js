@@ -20,6 +20,7 @@ export function createProjectCreationService(customDeps = {}) {
       brand_name: fields.brand_name || '',
       niche: fields.niche || '',
       product_description: fields.product_description || '',
+      sales_page_content: fields.sales_page_content || '',
       drive_folder_id: fields.drive_folder_id || '',
       inspiration_folder_id: fields.inspiration_folder_id || '',
     });
