@@ -1,5 +1,9 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-06 — Clarify Gemini zero-quota image errors
+
+- Gemini wrapper now surfaces a clearer error when Google returns limit: 0 / free_tier quota (billing/account state is the real cause), distinct from transient rate limits.
+
 ## 2026-05-06 — ThriveCampaigns brand asset
 
 - Logos replaced with actual ThriveCampaigns brand PNG (green logomark + black wordmark on transparent). User-visible brand string flipped to one-word "ThriveCampaigns" to match the asset. Internal slugs unchanged.

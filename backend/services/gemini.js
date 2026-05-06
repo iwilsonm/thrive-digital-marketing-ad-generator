@@ -45,6 +45,44 @@ function sanitizeAttemptMessage(message) {
   return String(message || '').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
 
+function collectProviderErrorMessages(value, seen = new Set()) {
+  if (!value || seen.has(value)) return [];
+
+  if (typeof value === 'string') return [value];
+  if (value instanceof Error) {
+    seen.add(value);
+    return [
+      value.message,
+      ...collectProviderErrorMessages(value.error, seen),
+      ...collectProviderErrorMessages(value.response, seen),
+      ...collectProviderErrorMessages(value.cause, seen),
+    ].filter(Boolean);
+  }
+  if (typeof value !== 'object') return [];
+
+  seen.add(value);
+  const messages = [];
+  if (typeof value.message === 'string') messages.push(value.message);
+  if (value.error) messages.push(...collectProviderErrorMessages(value.error, seen));
+  if (value.response) messages.push(...collectProviderErrorMessages(value.response, seen));
+  if (value.cause) messages.push(...collectProviderErrorMessages(value.cause, seen));
+  if (Array.isArray(value.details)) messages.push(...value.details.flatMap(detail => collectProviderErrorMessages(detail, seen)));
+  return messages;
+}
+
+function getProviderErrorText(err) {
+  return collectProviderErrorMessages(err).join(' ');
+}
+
+function isGeminiZeroQuotaError(providerErrorText) {
+  return /"?limit"?\s*[:=]\s*"?0"?/i.test(providerErrorText) || /free[_-]?tier/i.test(providerErrorText);
+}
+
+function isGeminiResourceExhaustedError(err, providerErrorText) {
+  const status = err?.status || err?.statusCode || err?.httpCode;
+  return status === 429 || err?.code === 'RESOURCE_EXHAUSTED' || /RESOURCE_EXHAUSTED/i.test(providerErrorText);
+}
+
 function buildTimeoutError(timeoutMs) {
   const err = new Error(`Gemini image generation attempt timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
   err.code = 'GEMINI_ATTEMPT_TIMEOUT';
@@ -225,11 +263,16 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
 
     return { imageBuffer, mimeType, textResponse, imageAttempts };
   } catch (err) {
+    const providerErrorText = getProviderErrorText(err);
+
     // Clean up Gemini API error messages — the SDK returns raw JSON as the message string
     if (err.message?.includes('INVALID_ARGUMENT')) {
       throw attachImageAttempts(new Error('Image generation temporarily unavailable (Gemini API capacity issue). Please try again in a moment.'), imageAttempts);
     }
-    if (err.message?.includes('RESOURCE_EXHAUSTED') || err.status === 429) {
+    if (isGeminiResourceExhaustedError(err, providerErrorText)) {
+      if (isGeminiZeroQuotaError(providerErrorText)) {
+        throw attachImageAttempts(new Error("Gemini image generation requires a paid Google AI Studio tier — your current API key's project shows zero quota for this model. Enable billing at https://aistudio.google.com or switch the image model in Settings."), imageAttempts);
+      }
       throw attachImageAttempts(new Error('Image generation rate limit reached. Please wait a moment and try again.'), imageAttempts);
     }
     if (err.geminiErrorClass === 'timeout' || err.code === 'GEMINI_ATTEMPT_TIMEOUT') {
