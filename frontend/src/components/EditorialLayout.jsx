@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation, useMatch, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { AuthContext } from '../App';
@@ -29,6 +29,7 @@ export default function EditorialLayout() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user, setUser } = useContext(AuthContext);
+  const authIdentity = user?.id || user?.username || '';
 
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === 'true'; } catch { return false; }
@@ -36,6 +37,7 @@ export default function EditorialLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [pinnedProjects, setPinnedProjects] = useState([]);
+  const pinnedRetryRef = useRef(null);
 
   const projectMatch = useMatch('/projects/:id');
   const projectId = projectMatch?.params?.id;
@@ -55,8 +57,18 @@ export default function EditorialLayout() {
     return () => { cancelled = true; };
   }, [projectId]);
 
-  const loadPinnedProjects = useCallback(() => {
+  const loadPinnedProjects = useCallback((retryOnEmptySettings = true) => {
     let cancelled = false;
+    if (pinnedRetryRef.current) {
+      clearTimeout(pinnedRetryRef.current);
+      pinnedRetryRef.current = null;
+    }
+
+    if (!authIdentity) {
+      setPinnedProjects([]);
+      return () => { cancelled = true; };
+    }
+
     Promise.all([api.getSettings(), api.getProjects()])
       .then(([settings, projects]) => {
         if (cancelled) return;
@@ -64,12 +76,27 @@ export default function EditorialLayout() {
         const projectList = Array.isArray(projects) ? projects : [];
         const byId = new Map(projectList.map(project => [project.id, project]));
         setPinnedProjects(pinnedIds.map(id => byId.get(id)).filter(Boolean));
+
+        const settingsMissing = !settings || (typeof settings === 'object' && Object.keys(settings).length === 0);
+        if (retryOnEmptySettings && settingsMissing && pinnedIds.length === 0) {
+          pinnedRetryRef.current = setTimeout(() => {
+            pinnedRetryRef.current = null;
+            loadPinnedProjects(false);
+          }, 1500);
+        }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn('[EditorialLayout] Failed to load pinned projects:', err);
         if (!cancelled) setPinnedProjects([]);
       });
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+      if (pinnedRetryRef.current) {
+        clearTimeout(pinnedRetryRef.current);
+        pinnedRetryRef.current = null;
+      }
+    };
+  }, [authIdentity]);
 
   useEffect(() => loadPinnedProjects(), [loadPinnedProjects]);
 

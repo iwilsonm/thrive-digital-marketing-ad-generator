@@ -1,5 +1,10 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Fix pinned projects initial sidebar load
+
+- Fixed pinned projects not appearing in the sidebar after initial login when the layout's first pinned-project fetch runs before auth/settings data is stable.
+- The sidebar now reloads pinned projects when the authenticated user identity hydrates, retries once when the first settings response is empty/missing, and logs fetch failures to the console instead of silently swallowing them.
+
 ## 2026-05-06 — Harden Gemini image generation
 
 - Single-ad Gemini renders now request `1K` images instead of `2K`, and each synchronous Gemini attempt can run up to 180 seconds before aborting.
