@@ -1,5 +1,11 @@
 # Thrive Campaigns — Changelog
 
+## 2026-05-06 — ProjectSetup product input simplified
+
+- ProjectSetup product input switched from PDF/paste sales page to free-form product description textarea; prompt1 intro updated; downstream pipeline unchanged.
+- Kept the internal `sales_page_content` form key and `salesPageContent` prompt variable names unchanged so existing backend contracts keep working.
+- Left `DragDropUpload` intact for Foundational Docs research/document upload flows.
+
 ## 2026-05-06 — Thrive Campaigns rebrand
 
 - Thrive Campaigns rebrand — green color theme, sidebar/login logos, user-visible wordmark; internal slugs unchanged.

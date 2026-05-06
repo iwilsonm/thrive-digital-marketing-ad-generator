@@ -21,7 +21,7 @@ const RESEARCH_METHODOLOGY_PROMPT = fs.readFileSync(
 // Step 8 produces the Necessary Beliefs (synthesis via GPT-4.1).
 
 function prompt1_AnalyzeSalesPage(productDescription, salesPageContent) {
-  const intro = `You are my expert copywriter and you specialize in writing highly persuasive direct response style copy for my ecommerce brand that sells ${productDescription}. I'm going to send you a PDF screenshot of my current sales page, and I want you to analyze it and please let me know your thoughts.`;
+  const intro = `You are my expert copywriter and you specialize in writing highly persuasive direct response style copy for my brand. The product I'm advertising can be described as: ${productDescription}. Here's detailed information about the product I'm advertising. I want you to analyze it and please let me know your thoughts.`;
   const trimmed = (salesPageContent || '').trim();
   return trimmed ? `${intro}\n\n${trimmed}` : intro;
 }
