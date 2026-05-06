@@ -18,7 +18,7 @@ function getTimeEstimate(startTime, progress) {
 }
 
 const GenerationQueue = forwardRef(function GenerationQueue(
-  { activeGens, genQueueExpanded, setGenQueueExpanded, activeGenCount, dismissGen, onCancelGeneration, ...props },
+  { activeGens, genQueueExpanded, setGenQueueExpanded, activeGenCount, dismissGen, onCancelGeneration, onErrorAction, ...props },
   ref
 ) {
   if (activeGens.length === 0) return null;
@@ -83,6 +83,15 @@ const GenerationQueue = forwardRef(function GenerationQueue(
                       </p>
                       {gen.warning && (
                         <p className="text-[10px] text-ed-accent truncate">{gen.warning}</p>
+                      )}
+                      {gen.error && gen.errorCode === 'MISSING_PRODUCT_DESCRIPTION' && gen.errorActionUrl && (
+                        <button
+                          type="button"
+                          onClick={() => onErrorAction?.(gen)}
+                          className="mt-1 inline-flex items-center rounded-md bg-ed-rust/10 px-2 py-1 text-[10px] font-semibold text-ed-rust hover:bg-ed-rust/15 transition-colors"
+                        >
+                          {gen.errorActionLabel || 'Edit Product Description'}
+                        </button>
                       )}
                     </div>
                     {!gen.error && gen.status !== 'completed' && gen.status !== 'cancelled' && (

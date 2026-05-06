@@ -72,7 +72,15 @@ export function streamService(req, res, serviceFn) {
     })
     .catch((err) => {
       console.error('[SSE] Stream error:', err.message);
-      sse.sendEvent({ type: 'error', message: err.message, error: err.message });
+      sse.sendEvent({
+        type: 'error',
+        message: err.message,
+        error: err.message,
+        ...(err.code ? { code: err.code } : {}),
+        ...(err.userActionable !== undefined ? { userActionable: err.userActionable } : {}),
+        ...(err.actionUrl ? { actionUrl: err.actionUrl } : {}),
+        ...(err.actionLabel ? { actionLabel: err.actionLabel } : {}),
+      });
       sse.end();
     });
 }

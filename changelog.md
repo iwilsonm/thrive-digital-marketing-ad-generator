@@ -1,5 +1,11 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Empty product description hardening
+
+- Populated `product_description` for the Christian Counsellor Webinar project in production Convex.
+- Ad generation now blocks before provider calls when `product_description` is empty and returns an actionable Project Settings link.
+- ProjectSetup now awaits auto-describe on submit, surfaces auto-describe failures visibly, and disables Create while product context is being generated.
+
 ## 2026-05-07 — Template Library preview modal portal
 
 - Template Library preview modal now renders via `createPortal` into `document.body`, avoiding ancestor transform/filter breaking `position: fixed` viewport anchoring.

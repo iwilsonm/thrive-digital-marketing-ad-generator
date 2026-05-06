@@ -48,6 +48,35 @@ if (!fs.existsSync(THUMB_CACHE_DIR)) {
 
 const TERMINAL_AD_STATUSES = new Set(['completed', 'failed', 'quality_rejected', 'cancelled', 'canceled']);
 const AD_CANCELLED_MESSAGE = 'Cancelled by user';
+const MISSING_PRODUCT_DESCRIPTION_MESSAGE = "This project is missing a Product Description. Add a clear 1-3 sentence description of what's actually being sold (the offer, who it's for, and what they get), then try generating again.";
+
+export function assertProductDescription(project) {
+  if (String(project?.product_description || '').trim()) return;
+
+  const projectExternalId = project?.externalId || project?.id;
+  const err = new Error(MISSING_PRODUCT_DESCRIPTION_MESSAGE);
+  err.code = 'MISSING_PRODUCT_DESCRIPTION';
+  err.userActionable = true;
+  err.actionUrl = projectExternalId ? `/projects/${projectExternalId}?tab=overview` : '/projects';
+  err.actionLabel = 'Edit Product Description';
+  throw err;
+}
+
+function buildAdErrorEvent(err) {
+  return {
+    type: 'error',
+    error: err.message,
+    message: err.message,
+    ...(err.code ? { code: err.code } : {}),
+    ...(err.userActionable !== undefined ? { userActionable: err.userActionable } : {}),
+    ...(err.actionUrl ? { actionUrl: err.actionUrl } : {}),
+    ...(err.actionLabel ? { actionLabel: err.actionLabel } : {}),
+  };
+}
+
+function emitAdError(emit, err) {
+  emit(buildAdErrorEvent(err));
+}
 
 function isTerminalAdStatus(status) {
   return TERMINAL_AD_STATUSES.has(status);
@@ -627,6 +656,7 @@ export async function generateAd(projectId, options = {}) {
         : selectInspirationImage(projectId, inspirationImageId, { templateTag }),
     ]);
     if (!project) throw new Error('Project not found');
+    assertProductDescription(project);
     await assertAdNotCancelled(adId, cancelSignal);
 
     const docs = { research, avatar, offer_brief, necessary_beliefs };
@@ -769,7 +799,7 @@ export async function generateAd(projectId, options = {}) {
       failure_stage: 'ad_generation',
       image_attempts: serializeImageAttempts(err.imageAttempts),
     });
-    emit({ type: 'error', error: err.message });
+    emitAdError(emit, err);
     throw err;
   } finally {
     stopHeartbeat();
@@ -896,6 +926,7 @@ export async function generateAdMode2(projectId, options = {}) {
       selectTemplateImage(templateImageId),
     ]);
     if (!project) throw new Error('Project not found');
+    assertProductDescription(project);
     await assertAdNotCancelled(adId, cancelSignal);
 
     const docs = { research, avatar, offer_brief, necessary_beliefs };
@@ -1029,7 +1060,7 @@ export async function generateAdMode2(projectId, options = {}) {
       failure_stage: 'ad_generation_mode2',
       image_attempts: serializeImageAttempts(err.imageAttempts),
     });
-    emit({ type: 'error', error: err.message });
+    emitAdError(emit, err);
     throw err;
   } finally {
     stopHeartbeat();
@@ -2423,6 +2454,7 @@ export async function regenerateImageOnly(projectId, options = {}) {
     await assertAdNotCancelled(adId, cancelSignal);
     const project = await getProject(projectId);
     if (!project) throw new Error('Project not found');
+    assertProductDescription(project);
     await assertAdNotCancelled(adId, cancelSignal);
 
     // Apply prompt guidelines if set
@@ -2477,7 +2509,7 @@ export async function regenerateImageOnly(projectId, options = {}) {
       failure_stage: 'image_regeneration',
       image_attempts: serializeImageAttempts(err.imageAttempts),
     });
-    emit({ type: 'error', error: err.message });
+    emitAdError(emit, err);
     throw err;
   } finally {
     stopHeartbeat();

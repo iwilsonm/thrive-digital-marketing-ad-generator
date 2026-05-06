@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import JSZip from 'jszip';
 import { api } from '../api';
 import BatchManager from './BatchManager';
@@ -128,6 +129,16 @@ function hasAdDetail(ad) {
 
 const DISPLAYABLE_IMAGE_STATUSES = new Set(['completed', 'staging', 'quality_rejected']);
 const ACTIVE_GENERATION_STATUSES = new Set(['pending', 'queued', 'preparing', 'generating_copy', 'generating_image']);
+
+function generationErrorUpdates(event) {
+  return {
+    error: event.error || event.message || 'Generation failed.',
+    errorCode: event.code || null,
+    errorActionUrl: event.actionUrl || null,
+    errorActionLabel: event.actionLabel || null,
+    status: null,
+  };
+}
 const FAILED_LIKE_STATUSES = new Set(['failed', 'quality_rejected']);
 
 function hasAdImage(ad) {
@@ -213,6 +224,7 @@ function getGalleryStatusMeta(ad) {
 
 export default function AdStudio({ projectId, project, onOpenPipeline }) {
   const toast = useToast();
+  const navigate = useNavigate();
 
   // Prompt guidelines (editable on Ad Studio, synced to project)
   const [promptGuidelines, setPromptGuidelines] = useState(project?.prompt_guidelines || '');
@@ -1104,6 +1116,12 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
     }
   };
 
+  const handleGenerationErrorAction = useCallback((gen) => {
+    if (gen?.errorCode === 'MISSING_PRODUCT_DESCRIPTION' && gen.errorActionUrl) {
+      navigate(gen.errorActionUrl);
+    }
+  }, [navigate]);
+
   const handleGenerate = async () => {
     // Create a unique ID for this generation
     const genId = ++genIdCounter.current;
@@ -1200,7 +1218,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
       } else if (event.type === 'cancelled') {
         handleGenerationCancelledEvent(genId, event.message || 'Cancelled');
       } else if (event.type === 'error') {
-        updateGen(genId, { error: event.error, status: null });
+        updateGen(genId, generationErrorUpdates(event));
       }
     };
 
@@ -1659,7 +1677,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
       } else if (event.type === 'cancelled') {
         handleGenerationCancelledEvent(genId, event.message || 'Cancelled');
       } else if (event.type === 'error') {
-        updateGen(genId, { error: event.error, status: null });
+        updateGen(genId, generationErrorUpdates(event));
       }
     };
 
@@ -1804,7 +1822,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         } else if (event.type === 'cancelled') {
           handleGenerationCancelledEvent(genId, event.message || 'Cancelled');
         } else if (event.type === 'error') {
-          updateGen(genId, { error: event.error, status: null });
+          updateGen(genId, generationErrorUpdates(event));
         }
       };
 
@@ -3276,6 +3294,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         activeGenCount={activeGenCount}
         dismissGen={dismissGen}
         onCancelGeneration={handleCancelGeneration}
+        onErrorAction={handleGenerationErrorAction}
       />
 
       {/* Ad Gallery */}

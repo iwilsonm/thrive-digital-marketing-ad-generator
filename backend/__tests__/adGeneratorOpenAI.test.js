@@ -209,6 +209,45 @@ describe('Gemini ad generation plumbing', () => {
     })]);
   });
 
+  it('blocks Mode 1 before provider calls when product_description is empty', async () => {
+    mocks.getProject.mockResolvedValueOnce({
+      id: 'project-1',
+      brand_name: 'Test Brand',
+      niche: 'wellness',
+      product_description: '   ',
+      prompt_guidelines: null,
+    });
+    const onEvent = vi.fn();
+
+    await expect(generateAd('project-1', {
+      uploadedImageBase64: Buffer.from('uploaded-layout').toString('base64'),
+      uploadedImageMimeType: 'image/png',
+      headline: 'Headline',
+      bodyCopy: 'Body',
+      onEvent,
+    })).rejects.toMatchObject({
+      code: 'MISSING_PRODUCT_DESCRIPTION',
+      actionUrl: '/projects/project-1?tab=overview',
+      actionLabel: 'Edit Product Description',
+    });
+
+    expect(mocks.chat).not.toHaveBeenCalled();
+    expect(mocks.chatWithImage).not.toHaveBeenCalled();
+    expect(mocks.chatWithImages).not.toHaveBeenCalled();
+    expect(mocks.geminiGenerateImage).not.toHaveBeenCalled();
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'error',
+      code: 'MISSING_PRODUCT_DESCRIPTION',
+      actionUrl: '/projects/project-1?tab=overview',
+      actionLabel: 'Edit Product Description',
+    }));
+    expect(mocks.convexMutation).toHaveBeenCalledWith('adCreatives.update', expect.objectContaining({
+      status: 'failed',
+      error_message: expect.stringContaining('missing a Product Description'),
+      failure_stage: 'ad_generation',
+    }));
+  });
+
   it('routes Mode 2 Nano Banana through the synchronous Gemini wrapper, not a batch job', async () => {
     await generateAdMode2('project-1', {
       templateImageId: 'template-1',
