@@ -29,6 +29,10 @@ if (!fs.existsSync(THUMB_CACHE_DIR)) {
 const router = Router();
 router.use(requireAuth);
 
+const TERMINAL_AD_STATUSES = new Set(['completed', 'failed', 'cancelled', 'canceled', 'quality_rejected']);
+const CANCELLABLE_AD_STATUSES = new Set(['pending', 'queued', 'generating_copy', 'generating_image']);
+const CANCEL_POLL_MS = 2000;
+
 function attachAdMedia(projectId, ad) {
   return {
     ...ad,
@@ -48,6 +52,44 @@ async function repairStaleAdsForProject(projectId) {
     console.warn(`[ads-cleanup] failed for project ${projectId}:`, err.message);
     return { repaired: 0, error: err.message };
   }
+}
+
+function createAdCancellationWatcher(sendEvent) {
+  const controller = new AbortController();
+  let adId = null;
+  let pollTimer = null;
+
+  const stop = () => {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+  };
+
+  const start = (nextAdId) => {
+    if (!nextAdId || nextAdId === adId) return;
+    adId = nextAdId;
+    stop();
+    pollTimer = setInterval(async () => {
+      if (controller.signal.aborted || !adId) return;
+      try {
+        const ad = await convexClient.query(api.adCreatives.getByExternalId, { externalId: adId });
+        if (ad?.cancellation_requested_at || ad?.status === 'cancelled' || ad?.status === 'canceled') {
+          controller.abort(new Error('Cancelled by user'));
+        }
+      } catch (err) {
+        console.warn(`[Ads] Cancellation poll failed for ${adId}:`, err.message);
+      }
+    }, CANCEL_POLL_MS);
+    if (typeof pollTimer.unref === 'function') pollTimer.unref();
+  };
+
+  return {
+    signal: controller.signal,
+    sendEvent(event) {
+      if (event?.adId) start(event.adId);
+      sendEvent(event);
+    },
+    stop,
+  };
 }
 
 // Generate an ad creative (SSE stream)
@@ -110,36 +152,43 @@ router.post('/:projectId/generate-ad', async (req, res) => {
   }
 
   streamService(req, res, async (sendEvent) => {
-    if (productImageWarning) {
-      sendEvent({ type: 'warning', tag: 'product_image_fetch_failed', message: productImageWarning });
-    }
-    if (mode === 'mode2') {
-      await generateAdMode2(req.params.projectId, {
-        templateImageId: template_image_id,
-        angle,
-        aspectRatio: aspect_ratio || '1:1',
-        imageModel: image_model || undefined,
-        productImageBase64: product_image || undefined,
-        productImageMimeType: product_image_mime || undefined,
-        headline: headline || undefined,
-        bodyCopy: body_copy || undefined,
-        onEvent: sendEvent
-      });
-    } else {
-      await generateAd(req.params.projectId, {
-        angle,
-        aspectRatio: aspect_ratio || '1:1',
-        imageModel: image_model || undefined,
-        inspirationImageId: inspiration_image_id,
-        templateTag: template_tag || undefined,
-        uploadedImageBase64: uploaded_image || undefined,
-        uploadedImageMimeType: uploaded_image_mime || undefined,
-        productImageBase64: product_image || undefined,
-        productImageMimeType: product_image_mime || undefined,
-        headline: headline || undefined,
-        bodyCopy: body_copy || undefined,
-        onEvent: sendEvent
-      });
+    const cancellation = createAdCancellationWatcher(sendEvent);
+    try {
+      if (productImageWarning) {
+        cancellation.sendEvent({ type: 'warning', tag: 'product_image_fetch_failed', message: productImageWarning });
+      }
+      if (mode === 'mode2') {
+        await generateAdMode2(req.params.projectId, {
+          templateImageId: template_image_id,
+          angle,
+          aspectRatio: aspect_ratio || '1:1',
+          imageModel: image_model || undefined,
+          productImageBase64: product_image || undefined,
+          productImageMimeType: product_image_mime || undefined,
+          headline: headline || undefined,
+          bodyCopy: body_copy || undefined,
+          onEvent: cancellation.sendEvent,
+          cancelSignal: cancellation.signal
+        });
+      } else {
+        await generateAd(req.params.projectId, {
+          angle,
+          aspectRatio: aspect_ratio || '1:1',
+          imageModel: image_model || undefined,
+          inspirationImageId: inspiration_image_id,
+          templateTag: template_tag || undefined,
+          uploadedImageBase64: uploaded_image || undefined,
+          uploadedImageMimeType: uploaded_image_mime || undefined,
+          productImageBase64: product_image || undefined,
+          productImageMimeType: product_image_mime || undefined,
+          headline: headline || undefined,
+          bodyCopy: body_copy || undefined,
+          onEvent: cancellation.sendEvent,
+          cancelSignal: cancellation.signal
+        });
+      }
+    } finally {
+      cancellation.stop();
     }
   });
 });
@@ -187,23 +236,29 @@ router.post('/:projectId/regenerate-image', async (req, res) => {
   }
 
   streamService(req, res, async (sendEvent) => {
-    if (productImageWarning) {
-      sendEvent({ type: 'warning', tag: 'product_image_fetch_failed', message: productImageWarning });
+    const cancellation = createAdCancellationWatcher(sendEvent);
+    try {
+      if (productImageWarning) {
+        cancellation.sendEvent({ type: 'warning', tag: 'product_image_fetch_failed', message: productImageWarning });
+      }
+      await regenerateImageOnly(req.params.projectId, {
+        imagePrompt: image_prompt.trim(),
+        aspectRatio: aspect_ratio || '1:1',
+        imageModel: image_model || undefined,
+        parentAdId: parent_ad_id || undefined,
+        productImageBase64: product_image || undefined,
+        productImageMimeType: product_image_mime || undefined,
+        referenceImageBase64: reference_image || undefined,
+        referenceImageMimeType: reference_image_mime || undefined,
+        angle: angle || undefined,
+        headline: headline || undefined,
+        bodyCopy: body_copy || undefined,
+        onEvent: cancellation.sendEvent,
+        cancelSignal: cancellation.signal
+      });
+    } finally {
+      cancellation.stop();
     }
-    await regenerateImageOnly(req.params.projectId, {
-      imagePrompt: image_prompt.trim(),
-      aspectRatio: aspect_ratio || '1:1',
-      imageModel: image_model || undefined,
-      parentAdId: parent_ad_id || undefined,
-      productImageBase64: product_image || undefined,
-      productImageMimeType: product_image_mime || undefined,
-      referenceImageBase64: reference_image || undefined,
-      referenceImageMimeType: reference_image_mime || undefined,
-      angle: angle || undefined,
-      headline: headline || undefined,
-      bodyCopy: body_copy || undefined,
-      onEvent: sendEvent
-    });
   });
 });
 
@@ -398,6 +453,41 @@ router.get('/:projectId/ads/in-progress', async (req, res) => {
     await repairStaleAdsForProject(req.params.projectId);
     const ads = await getInProgressAdsByProject(req.params.projectId);
     res.json({ ads });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Request cancellation for an active single-ad generation.
+// The running SSE worker observes this flag and performs the terminal transition.
+router.post('/:projectId/ads/:adId/cancel', async (req, res) => {
+  try {
+    const ad = await getAd(req.params.adId);
+    if (!ad || ad.project_id !== req.params.projectId) {
+      return res.status(404).json({ error: 'Ad not found' });
+    }
+
+    if (TERMINAL_AD_STATUSES.has(ad.status)) {
+      return res.status(409).json({ error: `Cannot cancel ad in "${ad.status}" state.` });
+    }
+
+    if (!CANCELLABLE_AD_STATUSES.has(ad.status)) {
+      return res.status(409).json({ error: `Cannot cancel ad in "${ad.status || 'unknown'}" state.` });
+    }
+
+    const cancellationRequestedAt = new Date().toISOString();
+    await convexClient.mutation(api.adCreatives.update, {
+      externalId: req.params.adId,
+      cancellation_requested_at: cancellationRequestedAt,
+      cancelled_by: req.user?.username || req.user?.displayName || req.user?.id || 'unknown',
+      error_message: null,
+      failure_stage: null,
+    });
+
+    res.json({
+      success: true,
+      cancellation_requested_at: cancellationRequestedAt,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

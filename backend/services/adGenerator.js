@@ -47,9 +47,43 @@ if (!fs.existsSync(THUMB_CACHE_DIR)) {
 }
 
 const TERMINAL_AD_STATUSES = new Set(['completed', 'failed', 'quality_rejected', 'cancelled', 'canceled']);
+const AD_CANCELLED_MESSAGE = 'Cancelled by user';
 
 function isTerminalAdStatus(status) {
   return TERMINAL_AD_STATUSES.has(status);
+}
+
+function buildAdCancellationError(message = AD_CANCELLED_MESSAGE) {
+  const err = new Error(message);
+  err.code = 'AD_GENERATION_CANCELLED';
+  return err;
+}
+
+function isAdCancellationError(err, cancelSignal = null) {
+  if (!err) return false;
+  if (err.code === 'AD_GENERATION_CANCELLED' || err.code === 'GEMINI_CANCELLED') return true;
+  if (err.geminiErrorClass === 'cancelled') return true;
+  if (cancelSignal?.aborted && (err.name === 'AbortError' || /cancel|abort/i.test(err.message || ''))) return true;
+  return false;
+}
+
+async function assertAdNotCancelled(adId, cancelSignal = null) {
+  if (cancelSignal?.aborted) throw buildAdCancellationError();
+  const ad = await convexClient.query(api.adCreatives.getByExternalId, { externalId: adId });
+  if (ad?.cancellation_requested_at || ad?.status === 'cancelled' || ad?.status === 'canceled') {
+    throw buildAdCancellationError();
+  }
+  return ad;
+}
+
+async function markAdCancelled(adId, emit, fields = {}) {
+  await updateAdCreative(adId, {
+    status: 'cancelled',
+    error_message: AD_CANCELLED_MESSAGE,
+    failure_stage: null,
+    ...fields,
+  });
+  emit({ type: 'cancelled', adId, message: AD_CANCELLED_MESSAGE });
 }
 
 function serializeImageAttempts(attempts) {
@@ -551,7 +585,7 @@ export async function selectTemplateImage(templateImageId) {
  * @returns {Promise<object>} The completed ad creative record
  */
 export async function generateAd(projectId, options = {}) {
-  const { angle, aspectRatio = '1:1', imageModel, inspirationImageId, templateTag, uploadedImageBase64, uploadedImageMimeType, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent } = options;
+  const { angle, aspectRatio = '1:1', imageModel, inspirationImageId, templateTag, uploadedImageBase64, uploadedImageMimeType, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent, cancelSignal } = options;
 
   const emit = (event) => {
     if (onEvent) {
@@ -578,6 +612,8 @@ export async function generateAd(projectId, options = {}) {
 
   const stopHeartbeat = startAdHeartbeat(adId);
   try {
+    await assertAdNotCancelled(adId, cancelSignal);
+
     // 1. Load project + foundational docs + inspiration image in parallel
     const useUploadedImage = !!(uploadedImageBase64 && uploadedImageMimeType);
     const [project, research, avatar, offer_brief, necessary_beliefs, inspiration] = await Promise.all([
@@ -591,6 +627,7 @@ export async function generateAd(projectId, options = {}) {
         : selectInspirationImage(projectId, inspirationImageId, { templateTag }),
     ]);
     if (!project) throw new Error('Project not found');
+    await assertAdNotCancelled(adId, cancelSignal);
 
     const docs = { research, avatar, offer_brief, necessary_beliefs };
 
@@ -612,6 +649,7 @@ export async function generateAd(projectId, options = {}) {
     let renderReferenceImages = [];
 
     let imagePrompt = await withHeavyLLMLimit(async () => {
+      await assertAdNotCancelled(adId, cancelSignal);
       // Message 1: Creative director prompt + foundational docs
       emitProgress(emit, adId, { status: 'generating_copy', message: 'Sending creative brief to GPT-5.2...', progress: 15 });
 
@@ -619,9 +657,10 @@ export async function generateAd(projectId, options = {}) {
       const acknowledgment = await chat(
         [{ role: 'user', content: creativeDirectorPrompt_inner }],
         'gpt-5.2',
-        { operation: 'ad_creative_director', projectId }
+        { operation: 'ad_creative_director', projectId, signal: cancelSignal }
       );
 
+      await assertAdNotCancelled(adId, cancelSignal);
       // Message 2: Inspiration image + optional product image + instructions
       emitProgress(emit, adId, { status: 'generating_copy', message: hasProductImage
         ? 'GPT-5.2 analyzing inspiration image + product image...'
@@ -649,7 +688,7 @@ export async function generateAd(projectId, options = {}) {
             { base64: productImageBase64, mimeType: productImageMimeType }
           ],
           'gpt-5.2',
-          { operation: 'ad_generation_mode1', projectId }
+          { operation: 'ad_generation_mode1', projectId, signal: cancelSignal }
         );
       } else {
         prompt = await chatWithImage(
@@ -658,7 +697,7 @@ export async function generateAd(projectId, options = {}) {
           inspirationBase64,
           inspiration.mimeType,
           'gpt-5.2',
-          { operation: 'ad_generation_mode1', projectId }
+          { operation: 'ad_generation_mode1', projectId, signal: cancelSignal }
         );
       }
 
@@ -667,11 +706,14 @@ export async function generateAd(projectId, options = {}) {
 
       return prompt;
     }, `[Mode1 Ad ${adId.slice(0, 8)}]`);
+    await assertAdNotCancelled(adId, cancelSignal);
 
     // Apply prompt guidelines if set (uses gpt-4.1-mini, not rate-limited)
     if (project.prompt_guidelines) {
+      await assertAdNotCancelled(adId, cancelSignal);
       emitProgress(emit, adId, { status: 'generating_copy', message: 'Reviewing prompt against guidelines...', progress: 55 });
       imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines);
+      await assertAdNotCancelled(adId, cancelSignal);
     }
 
     // Extract headline & body copy from GPT output (non-blocking, runs in parallel)
@@ -683,6 +725,7 @@ export async function generateAd(projectId, options = {}) {
       image_prompt: imagePrompt,
       status: 'generating_image',
     });
+    await assertAdNotCancelled(adId, cancelSignal);
 
     // Save extracted headline/body (don't block image generation)
     extractionPromise.then(({ headline: extractedHeadline, body_copy: extractedBody }) => {
@@ -706,12 +749,19 @@ export async function generateAd(projectId, options = {}) {
       productImage, imageModel, renderReferenceImages,
       expectedHeadline: headline || null,
       expectedBodyCopy: bodyCopy || null,
-      emit
+      emit,
+      cancelSignal
     });
 
     return ad;
 
   } catch (err) {
+    if (isAdCancellationError(err, cancelSignal)) {
+      await markAdCancelled(adId, emit, {
+        image_attempts: serializeImageAttempts(err.imageAttempts),
+      });
+      return null;
+    }
     // Mark as failed
     await updateAdCreative(adId, {
       status: 'failed',
@@ -726,21 +776,24 @@ export async function generateAd(projectId, options = {}) {
   }
 }
 
-async function generateAndSaveImage({ adId, projectId, project, imagePrompt, aspectRatio, angle, productImage, imageModel, renderReferenceImages = [], expectedHeadline = null, expectedBodyCopy = null, emit, modeLabel = 'Mode1' }) {
+async function generateAndSaveImage({ adId, projectId, project, imagePrompt, aspectRatio, angle, productImage, imageModel, renderReferenceImages = [], expectedHeadline = null, expectedBodyCopy = null, emit, modeLabel = 'Mode1', cancelSignal = null }) {
   const modelLabel = imageModelLabel(imageModel);
   const imageGen = resolveImageProvider(imageModel);
+  await assertAdNotCancelled(adId, cancelSignal);
   emitProgress(emit, adId, { status: 'generating_image', message: (productImage || renderReferenceImages.length > 0)
     ? `Generating image with ${modelLabel} (with product reference)...`
     : `Generating image with ${modelLabel}...`, progress: 70 });
 
   const { imageBuffer, mimeType: imgMime, imageAttempts } = await imageGen(imagePrompt, aspectRatio, productImage, {
-    projectId, operation: 'ad_image_generation', imageModel, imageSize: '1K',
+    projectId, operation: 'ad_image_generation', imageModel, imageSize: '1K', cancelSignal,
   });
+  await assertAdNotCancelled(adId, cancelSignal);
 
   emitProgress(emit, adId, { status: 'generating_image', message: 'Uploading image...', progress: 90 });
 
   // Upload image to Convex storage
   const storageId = await uploadBuffer(imageBuffer, imgMime);
+  await assertAdNotCancelled(adId, cancelSignal);
 
   // Pre-generate thumbnail cache (fire-and-forget)
   precacheThumb(adId, imageBuffer);
@@ -800,7 +853,7 @@ async function generateAndSaveImage({ adId, projectId, project, imagePrompt, asp
  * @returns {Promise<object>} The completed ad creative record
  */
 export async function generateAdMode2(projectId, options = {}) {
-  const { templateImageId, angle, aspectRatio = '1:1', imageModel, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent } = options;
+  const { templateImageId, angle, aspectRatio = '1:1', imageModel, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent, cancelSignal } = options;
 
   const emit = (event) => {
     if (onEvent) {
@@ -831,6 +884,8 @@ export async function generateAdMode2(projectId, options = {}) {
 
   const stopHeartbeat = startAdHeartbeat(adId);
   try {
+    await assertAdNotCancelled(adId, cancelSignal);
+
     // 1. Load project + foundational docs + template image (+ optional headline ref) in parallel
     const [project, research, avatar, offer_brief, necessary_beliefs, template] = await Promise.all([
       getProject(projectId),
@@ -841,6 +896,7 @@ export async function generateAdMode2(projectId, options = {}) {
       selectTemplateImage(templateImageId),
     ]);
     if (!project) throw new Error('Project not found');
+    await assertAdNotCancelled(adId, cancelSignal);
 
     const docs = { research, avatar, offer_brief, necessary_beliefs };
 
@@ -854,6 +910,7 @@ export async function generateAdMode2(projectId, options = {}) {
     let renderReferenceImages = [];
 
     let imagePrompt = await withHeavyLLMLimit(async () => {
+      await assertAdNotCancelled(adId, cancelSignal);
       // Message 1: Creative director prompt + foundational docs
       emitProgress(emit, adId, { status: 'generating_copy', message: 'Sending creative brief to GPT-5.2...', progress: 15 });
 
@@ -861,9 +918,10 @@ export async function generateAdMode2(projectId, options = {}) {
       const acknowledgment = await chat(
         [{ role: 'user', content: creativeDirectorPrompt_inner }],
         'gpt-5.2',
-        { operation: 'ad_creative_director', projectId }
+        { operation: 'ad_creative_director', projectId, signal: cancelSignal }
       );
 
+      await assertAdNotCancelled(adId, cancelSignal);
       // Message 2: Template image + optional product image + instructions
       emitProgress(emit, adId, { status: 'generating_copy', message: hasProductImage
         ? 'GPT-5.2 analyzing template image + product image...'
@@ -891,7 +949,7 @@ export async function generateAdMode2(projectId, options = {}) {
             { base64: productImageBase64, mimeType: productImageMimeType }
           ],
           'gpt-5.2',
-          { operation: 'ad_generation_mode2', projectId }
+          { operation: 'ad_generation_mode2', projectId, signal: cancelSignal }
         );
       } else {
         prompt = await chatWithImage(
@@ -900,7 +958,7 @@ export async function generateAdMode2(projectId, options = {}) {
           templateBase64,
           template.mimeType,
           'gpt-5.2',
-          { operation: 'ad_generation_mode2', projectId }
+          { operation: 'ad_generation_mode2', projectId, signal: cancelSignal }
         );
       }
 
@@ -909,11 +967,14 @@ export async function generateAdMode2(projectId, options = {}) {
 
       return prompt;
     }, `[Mode2 Ad ${adId.slice(0, 8)}]`);
+    await assertAdNotCancelled(adId, cancelSignal);
 
     // Apply prompt guidelines if set (uses gpt-4.1-mini, not rate-limited)
     if (project.prompt_guidelines) {
+      await assertAdNotCancelled(adId, cancelSignal);
       emitProgress(emit, adId, { status: 'generating_copy', message: 'Reviewing prompt against guidelines...', progress: 55 });
       imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines);
+      await assertAdNotCancelled(adId, cancelSignal);
     }
 
     // Extract headline & body copy from GPT output (non-blocking, runs in parallel)
@@ -925,6 +986,7 @@ export async function generateAdMode2(projectId, options = {}) {
       image_prompt: imagePrompt,
       status: 'generating_image',
     });
+    await assertAdNotCancelled(adId, cancelSignal);
 
     // Save extracted headline/body (don't block image generation)
     extractionPromise.then(({ headline: extractedHeadline, body_copy: extractedBody }) => {
@@ -948,12 +1010,19 @@ export async function generateAdMode2(projectId, options = {}) {
       productImage, imageModel, renderReferenceImages,
       expectedHeadline: headline || null,
       expectedBodyCopy: bodyCopy || null,
-      emit, modeLabel: 'Mode2'
+      emit, modeLabel: 'Mode2',
+      cancelSignal
     });
 
     return ad;
 
   } catch (err) {
+    if (isAdCancellationError(err, cancelSignal)) {
+      await markAdCancelled(adId, emit, {
+        image_attempts: serializeImageAttempts(err.imageAttempts),
+      });
+      return null;
+    }
     await updateAdCreative(adId, {
       status: 'failed',
       error_message: err.message,
@@ -2304,6 +2373,7 @@ export async function regenerateImageOnly(projectId, options = {}) {
     subAngle,
     templateImageId,
     inspirationImageId,
+    cancelSignal,
   } = options;
 
   const emit = (event) => {
@@ -2350,14 +2420,18 @@ export async function regenerateImageOnly(projectId, options = {}) {
 
   const stopHeartbeat = startAdHeartbeat(adId);
   try {
+    await assertAdNotCancelled(adId, cancelSignal);
     const project = await getProject(projectId);
     if (!project) throw new Error('Project not found');
+    await assertAdNotCancelled(adId, cancelSignal);
 
     // Apply prompt guidelines if set
     let finalPrompt = imagePrompt.trim();
     if (project.prompt_guidelines) {
+      await assertAdNotCancelled(adId, cancelSignal);
       emitProgress(emit, adId, { status: 'generating_image', message: 'Reviewing prompt against guidelines...', progress: 20 });
       finalPrompt = await reviewPromptWithGuidelines(finalPrompt, project.prompt_guidelines);
+      await assertAdNotCancelled(adId, cancelSignal);
       // Update the stored prompt if it changed
       if (finalPrompt !== imagePrompt.trim()) {
         await updateAdCreative(adId, {
@@ -2384,12 +2458,19 @@ export async function regenerateImageOnly(projectId, options = {}) {
       expectedHeadline: headline || null,
       expectedBodyCopy: bodyCopy || null,
       emit,
-      modeLabel: 'Regen'
+      modeLabel: 'Regen',
+      cancelSignal
     });
 
     return ad;
 
   } catch (err) {
+    if (isAdCancellationError(err, cancelSignal)) {
+      await markAdCancelled(adId, emit, {
+        image_attempts: serializeImageAttempts(err.imageAttempts),
+      });
+      return null;
+    }
     await updateAdCreative(adId, {
       status: 'failed',
       error_message: err.message,

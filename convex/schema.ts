@@ -155,6 +155,8 @@ export default defineSchema({
     gemini_batch_job: v.optional(v.string()), // Ad Studio durable image job name
     error_message: v.optional(v.union(v.string(), v.null())),
     failure_stage: v.optional(v.union(v.string(), v.null())),
+    cancellation_requested_at: v.optional(v.string()),
+    cancelled_by: v.optional(v.string()),
     last_progress_at: v.optional(v.string()),
     image_attempts: v.optional(v.string()), // JSON array of sync image-generation attempt diagnostics
     updated_at: v.optional(v.string()),

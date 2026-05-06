@@ -45,14 +45,14 @@ function logCostFromResponse(response, model, options) {
  */
 export async function chatStream(messages, onChunk, model = 'gpt-4.1', options = {}) {
   const openai = await getClient();
-  const { operation, projectId } = options;
+  const { operation, projectId, signal } = options;
 
   try {
     const stream = await withRetry(
       () => openai.chat.completions.create({
         model, messages, stream: true,
         stream_options: { include_usage: true },
-      }),
+      }, signal ? { signal } : undefined),
       { label: '[OpenAI chatStream]' }
     );
 
@@ -184,7 +184,8 @@ const OPENAI_FALLBACK_CHAIN = {
  */
 export async function chat(messages, model = 'gpt-4.1', options = {}) {
   const openai = await getClient();
-  const { operation, projectId, onWarning, ...apiOptions } = options;
+  const { operation, projectId, onWarning, signal, ...apiOptions } = options;
+  const requestOptions = signal ? { signal } : undefined;
 
   // Normalize legacy `max_tokens` → `max_completion_tokens`. Reasoning-class
   // models (gpt-5.x, o1, o3) reject `max_tokens` with a 400; the new param
@@ -197,7 +198,7 @@ export async function chat(messages, model = 'gpt-4.1', options = {}) {
   let activeModel = model;
   try {
     const response = await withRetry(
-      () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }),
+      () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }, requestOptions),
       { label: `[OpenAI chat ${activeModel}]` }
     );
     logCostFromResponse(response, activeModel, { operation, projectId });
@@ -220,7 +221,7 @@ export async function chat(messages, model = 'gpt-4.1', options = {}) {
       activeModel = fallbackModel;
       try {
         const response = await withRetry(
-          () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }),
+          () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }, requestOptions),
           { label: `[OpenAI chat ${activeModel}]` }
         );
         logCostFromResponse(response, activeModel, { operation, projectId });
@@ -239,7 +240,8 @@ export async function chat(messages, model = 'gpt-4.1', options = {}) {
  */
 export async function chatWithImage(messages, text, base64Image, mimeType, model = 'gpt-4.1', options = {}) {
   const openai = await getClient();
-  const { operation, projectId, ...apiOptions } = options;
+  const { operation, projectId, signal, ...apiOptions } = options;
+  const requestOptions = signal ? { signal } : undefined;
   const newMessage = {
     role: 'user',
     content: [
@@ -250,7 +252,7 @@ export async function chatWithImage(messages, text, base64Image, mimeType, model
 
   try {
     const response = await withRetry(
-      () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }),
+      () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }, requestOptions),
       { label: '[OpenAI chatWithImage]' }
     );
     logCostFromResponse(response, model, { operation, projectId });
@@ -266,7 +268,8 @@ export async function chatWithImage(messages, text, base64Image, mimeType, model
  */
 export async function chatWithImages(messages, text, images, model = 'gpt-4.1', options = {}) {
   const openai = await getClient();
-  const { operation, projectId, ...apiOptions } = options;
+  const { operation, projectId, signal, ...apiOptions } = options;
+  const requestOptions = signal ? { signal } : undefined;
   const content = [
     { type: 'text', text }
   ];
@@ -282,7 +285,7 @@ export async function chatWithImages(messages, text, images, model = 'gpt-4.1', 
 
   try {
     const response = await withRetry(
-      () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }),
+      () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }, requestOptions),
       { label: '[OpenAI chatWithImages]' }
     );
     logCostFromResponse(response, model, { operation, projectId });

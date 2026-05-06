@@ -150,4 +150,32 @@ describe('Gemini synchronous image attempt timeout', () => {
     expect(mocks.generateContent.mock.calls[0][0].config.imageConfig.imageSize).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('legacy image model alias "gemini-3-pro"'));
   });
+
+  it('classifies an external cancel signal separately from timeout', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    mocks.generateContent.mockImplementationOnce(() => new Promise(() => {}));
+
+    const generation = generateImage('prompt', '1:1', null, {
+      projectId: 'project-1',
+      imageModel: 'nano-banana-2',
+      operation: 'ad_image_generation',
+      cancelSignal: controller.signal,
+    });
+
+    const expectation = expect(generation).rejects.toMatchObject({
+      message: 'Cancelled by user',
+      imageAttempts: [
+        expect.objectContaining({
+          attempt_number: 1,
+          error_class: 'cancelled',
+        }),
+      ],
+    });
+
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    await expectation;
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
 });

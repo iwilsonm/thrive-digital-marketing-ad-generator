@@ -127,7 +127,7 @@ function hasAdDetail(ad) {
 }
 
 const DISPLAYABLE_IMAGE_STATUSES = new Set(['completed', 'staging', 'quality_rejected']);
-const ACTIVE_GENERATION_STATUSES = new Set(['generating_copy', 'generating_image']);
+const ACTIVE_GENERATION_STATUSES = new Set(['pending', 'queued', 'preparing', 'generating_copy', 'generating_image']);
 const FAILED_LIKE_STATUSES = new Set(['failed', 'quality_rejected']);
 
 function hasAdImage(ad) {
@@ -305,7 +305,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
   const queueRef = useRef(null);
 
   // Derived count of in-progress generations
-  const activeGenCount = activeGens.filter(g => g.status && g.status !== 'completed' && !g.error).length;
+  const activeGenCount = activeGens.filter(g => g.status && g.status !== 'completed' && g.status !== 'cancelled' && !g.error).length;
 
   // Gallery
   const { data: ads, setData: setAds, loading: loadingAds, refetch: loadAds } = useAsyncData(
@@ -447,14 +447,14 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
   usePolling(() => syncInProgressAds(), 5000, !!projectId);
 
   // Poll for status updates on restored queue items.
-  const trackedGenerationCount = activeGens.filter(g => g.adExternalId && g.status !== 'completed' && !g.error).length;
+  const trackedGenerationCount = activeGens.filter(g => g.adExternalId && g.status !== 'completed' && g.status !== 'cancelled' && !g.error).length;
 
   usePolling(async () => {
     try {
       const data = await api.getInProgressAds(projectId);
       const inProgressMap = new Map(ensureArray(data?.ads, 'AdStudio.inProgressAds').map(a => [a.id, a]));
 
-      const currentTracked = activeGens.filter(g => g.adExternalId && g.status !== 'completed' && !g.error);
+      const currentTracked = activeGens.filter(g => g.adExternalId && g.status !== 'completed' && g.status !== 'cancelled' && !g.error);
       const disappeared = currentTracked.filter(g => !inProgressMap.has(g.adExternalId));
 
       const finalAds = {};
@@ -479,6 +479,9 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
           const finalAd = finalAds[g.adExternalId];
           if (finalAd?.status === 'failed') {
             return { ...g, status: null, error: finalAd.error_message || 'Generation failed on server', progress: 0 };
+          }
+          if (finalAd?.status === 'cancelled' || finalAd?.status === 'canceled') {
+            return { ...g, status: 'cancelled', message: 'Cancelled', progress: 0, cancelling: false };
           }
           if (isCompletedImageReady(finalAd)) {
             return { ...g, status: 'completed', message: 'Ad generated successfully!', progress: 100 };
@@ -515,7 +518,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         return g;
       }));
 
-      const finalAdRows = Object.values(finalAds).filter(ad => ad?.id && (ad.status === 'failed' || isCompletedImageReady(ad)));
+      const finalAdRows = Object.values(finalAds).filter(ad => ad?.id && (ad.status === 'failed' || ad.status === 'cancelled' || ad.status === 'canceled' || isCompletedImageReady(ad)));
       const completedAds = finalAdRows.filter(isCompletedImageReady);
       if (finalAdRows.length > 0) {
         setAds(prev => {
@@ -545,7 +548,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
     const interval = setInterval(() => {
       const now = Date.now();
       setActiveGens(prev => prev.map(g => {
-        if (!g.status || g.status === 'completed' || g.error) return g;
+        if (!g.status || g.status === 'completed' || g.status === 'cancelled' || g.error) return g;
         const lastEventAt = g.lastEventAt || g.startTime || now;
         if (now - lastEventAt < QUEUE_WATCHDOG_MS) return g;
         return {
@@ -1064,6 +1067,43 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
     });
   };
 
+  const handleGenerationCancelledEvent = (genId, message = 'Cancelled') => {
+    updateGen(genId, {
+      status: 'cancelled',
+      message,
+      progress: 0,
+      error: '',
+      warning: '',
+      cancelling: false,
+      source: 'sse',
+    });
+    loadAds();
+  };
+
+  const handleCancelGeneration = async (gen) => {
+    if (!gen?.adExternalId || gen.cancelling || gen.status === 'cancelled' || gen.status === 'completed') return;
+    updateGen(gen.id, {
+      cancelling: true,
+      message: 'Cancelling...',
+      warning: '',
+    });
+    try {
+      await api.cancelAd(projectId, gen.adExternalId);
+      gen.stream?.abort?.();
+      updateGen(gen.id, {
+        message: 'Cancellation requested...',
+        cancelling: true,
+      });
+    } catch (err) {
+      if (err?.status === 409) {
+        toast.info('Generation already finished — refresh to see result.');
+      } else {
+        toast.error(err.message || 'Failed to cancel generation.');
+      }
+      updateGen(gen.id, { cancelling: false });
+    }
+  };
+
   const handleGenerate = async () => {
     // Create a unique ID for this generation
     const genId = ++genIdCounter.current;
@@ -1157,6 +1197,8 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         updateGen(genId, { warning: event.message });
       } else if (event.type === 'complete') {
         handleGenerationCompleteEvent(genId, event.ad, 'Ad generated successfully!');
+      } else if (event.type === 'cancelled') {
+        handleGenerationCancelledEvent(genId, event.message || 'Cancelled');
       } else if (event.type === 'error') {
         updateGen(genId, { error: event.error, status: null });
       }
@@ -1201,6 +1243,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
 
       if (exceedsCombinedSizeLimit()) return;
       stream = api.regenerateImage(projectId, options, handleEvent);
+      updateGen(genId, { stream });
     } else if (templateSource === TEMPLATE_SELECT && selectedTemplate) {
       updateGen(genId, { status: 'generating_copy', message: 'Starting template-based generation...' });
 
@@ -1226,6 +1269,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
 
       if (exceedsCombinedSizeLimit()) return;
       stream = api.generateAd(projectId, options, handleEvent);
+      updateGen(genId, { stream });
     } else {
       updateGen(genId, { status: 'generating_copy', message: 'Starting ad generation...' });
 
@@ -1261,6 +1305,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
 
       if (exceedsCombinedSizeLimit()) return;
       stream = api.generateAd(projectId, options, handleEvent);
+      updateGen(genId, { stream });
     }
 
     if (oneTimeProductFile && !saveProductAsDefault) {
@@ -1283,6 +1328,9 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
       .catch(err => {
         setActiveGens(prev => prev.map(g => {
           if (g.id !== genId) return g;
+          if (g.cancelling) {
+            return { ...g, status: 'cancelled', message: 'Cancelled', progress: 0, cancelling: false, warning: '' };
+          }
           if (g.adExternalId) {
             return {
               ...g,
@@ -1608,6 +1656,8 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         updateGen(genId, { warning: event.message });
       } else if (event.type === 'complete') {
         handleGenerationCompleteEvent(genId, event.ad, 'Ad regenerated successfully!');
+      } else if (event.type === 'cancelled') {
+        handleGenerationCancelledEvent(genId, event.message || 'Cancelled');
       } else if (event.type === 'error') {
         updateGen(genId, { error: event.error, status: null });
       }
@@ -1626,6 +1676,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         headline: sourceAd.headline || undefined,
         body_copy: sourceAd.body_copy || undefined,
       }, handleEvent);
+      updateGen(genId, { stream });
     } else if (sourceAd.generation_mode === 'mode2' && sourceAd.template_image_id) {
       // Template-based ads: regenerate with same template
       updateGen(genId, { status: 'generating_copy', message: 'Regenerating template-based ad...', progress: 5 });
@@ -1637,6 +1688,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         headline: sourceAd.headline || undefined,
         body_copy: sourceAd.body_copy || undefined,
       }, handleEvent);
+      updateGen(genId, { stream });
     } else {
       // Standard mode1 ads: regenerate with random inspiration
       updateGen(genId, { status: 'generating_copy', message: 'Regenerating ad...', progress: 5 });
@@ -1647,6 +1699,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         headline: sourceAd.headline || undefined,
         body_copy: sourceAd.body_copy || undefined,
       }, handleEvent);
+      updateGen(genId, { stream });
     }
 
     await stream.done
@@ -1664,6 +1717,9 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
       .catch(err => {
         setActiveGens(prev => prev.map(g => {
           if (g.id !== genId) return g;
+          if (g.cancelling) {
+            return { ...g, status: 'cancelled', message: 'Cancelled', progress: 0, cancelling: false, warning: '' };
+          }
           if (g.adExternalId) {
             return {
               ...g,
@@ -1745,6 +1801,8 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
           updateGen(genId, { warning: event.message });
         } else if (event.type === 'complete') {
           handleGenerationCompleteEvent(genId, event.ad, 'Image retry completed!');
+        } else if (event.type === 'cancelled') {
+          handleGenerationCancelledEvent(genId, event.message || 'Cancelled');
         } else if (event.type === 'error') {
           updateGen(genId, { error: event.error, status: null });
         }
@@ -1759,6 +1817,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         headline: sourceAd.headline || undefined,
         body_copy: sourceAd.body_copy || undefined,
       }, handleEvent);
+      updateGen(genId, { stream });
 
       await stream.done
         .then(() => {
@@ -1775,6 +1834,9 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         .catch(err => {
           setActiveGens(prev => prev.map(g => {
             if (g.id !== genId) return g;
+            if (g.cancelling) {
+              return { ...g, status: 'cancelled', message: 'Cancelled', progress: 0, cancelling: false, warning: '' };
+            }
             if (g.adExternalId) {
               return {
                 ...g,
@@ -3213,6 +3275,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         setGenQueueExpanded={setGenQueueExpanded}
         activeGenCount={activeGenCount}
         dismissGen={dismissGen}
+        onCancelGeneration={handleCancelGeneration}
       />
 
       {/* Ad Gallery */}

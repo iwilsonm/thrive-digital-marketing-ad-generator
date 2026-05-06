@@ -413,6 +413,8 @@ export const api = {
     request(`/projects/${projectId}/ads`).then(data => normalizeArrayResponse(data, 'ads', 'api.getAds.ads')),
   getInProgressAds: (projectId) => request(`/projects/${projectId}/ads/in-progress`),
   getAd: (projectId, adId) => request(`/projects/${projectId}/ads/${adId}`),
+  cancelAd: (projectId, adId) =>
+    request(`/projects/${projectId}/ads/${adId}/cancel`, { method: 'POST' }),
   deleteAd: (projectId, adId) =>
     request(`/projects/${projectId}/ads/${adId}`, { method: 'DELETE' }),
   updateAdTags: (projectId, adId, tags) =>

@@ -18,7 +18,7 @@ function getTimeEstimate(startTime, progress) {
 }
 
 const GenerationQueue = forwardRef(function GenerationQueue(
-  { activeGens, genQueueExpanded, setGenQueueExpanded, activeGenCount, dismissGen, ...props },
+  { activeGens, genQueueExpanded, setGenQueueExpanded, activeGenCount, dismissGen, onCancelGeneration, ...props },
   ref
 ) {
   if (activeGens.length === 0) return null;
@@ -69,7 +69,7 @@ const GenerationQueue = forwardRef(function GenerationQueue(
                   <div className="flex items-center gap-3">
                     {gen.error ? (
                       <svg className="w-3.5 h-3.5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
-                    ) : gen.status === 'completed' ? (
+                    ) : gen.status === 'completed' || gen.status === 'cancelled' ? (
                       <svg className="w-3.5 h-3.5 text-ed-green flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     ) : (
                       <svg className="w-3.5 h-3.5 text-ed-accent animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
@@ -77,7 +77,7 @@ const GenerationQueue = forwardRef(function GenerationQueue(
                       </svg>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className={`text-[12px] font-medium truncate ${gen.error ? 'text-red-600' : gen.status === 'completed' ? 'text-ed-green' : 'text-ed-ink'}`}>
+                      <p className={`text-[12px] font-medium truncate ${gen.error ? 'text-red-600' : gen.status === 'completed' || gen.status === 'cancelled' ? 'text-ed-green' : 'text-ed-ink'}`}>
                         {gen.label && <span className="text-ed-ink3 mr-1.5">{gen.label}</span>}
                         {gen.error || gen.message || 'Starting...'}
                       </p>
@@ -85,7 +85,7 @@ const GenerationQueue = forwardRef(function GenerationQueue(
                         <p className="text-[10px] text-ed-accent truncate">{gen.warning}</p>
                       )}
                     </div>
-                    {!gen.error && gen.status !== 'completed' && (
+                    {!gen.error && gen.status !== 'completed' && gen.status !== 'cancelled' && (
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-[10px] font-medium text-ed-accent">{gen.progress || 0}%</span>
                         {gen.startTime && getTimeEstimate(gen.startTime, gen.progress || 0) && (
@@ -93,14 +93,24 @@ const GenerationQueue = forwardRef(function GenerationQueue(
                         )}
                       </div>
                     )}
-                    {(gen.error || gen.status === 'completed') && (
+                    {!gen.error && gen.status !== 'completed' && gen.status !== 'cancelled' && gen.adExternalId && (
+                      <button
+                        type="button"
+                        onClick={() => onCancelGeneration?.(gen)}
+                        disabled={gen.cancelling}
+                        className="text-[10px] font-semibold text-ed-rust hover:text-ed-rust disabled:opacity-50 flex-shrink-0 transition-colors px-2 py-1 rounded-md hover:bg-ed-rust/5"
+                      >
+                        {gen.cancelling ? 'Cancelling...' : 'Cancel'}
+                      </button>
+                    )}
+                    {(gen.error || gen.status === 'completed' || gen.status === 'cancelled') && (
                       <button onClick={() => dismissGen(gen.id)} className="text-ed-ink3/50 hover:text-ed-ink2 flex-shrink-0 transition-colors">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     )}
                   </div>
                   {/* Progress bar — shown for active generations */}
-                  {!gen.error && gen.status !== 'completed' && (
+                  {!gen.error && gen.status !== 'completed' && gen.status !== 'cancelled' && (
                     <div className="w-full bg-black/5 rounded-full h-2 overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-700 ease-out"

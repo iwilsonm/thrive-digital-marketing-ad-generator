@@ -227,4 +227,67 @@ describe('Gemini ad generation plumbing', () => {
       gemini_batch_job: expect.any(String),
     }));
   });
+
+  it('marks the ad cancelled when cancellation is requested at a step boundary', async () => {
+    const onEvent = vi.fn();
+    mocks.convexQuery.mockResolvedValue({
+      externalId: 'test-ad-id',
+      project_id: 'project-1',
+      status: 'generating_copy',
+      cancellation_requested_at: '2026-05-07T00:00:00.000Z',
+    });
+
+    await expect(generateAd('project-1', {
+      uploadedImageBase64: Buffer.from('uploaded-layout').toString('base64'),
+      uploadedImageMimeType: 'image/png',
+      headline: 'Headline',
+      bodyCopy: 'Body',
+      onEvent,
+    })).resolves.toBeNull();
+
+    expect(mocks.geminiGenerateImage).not.toHaveBeenCalled();
+    expect(mocks.convexMutation).toHaveBeenCalledWith('adCreatives.update', expect.objectContaining({
+      externalId: 'test-ad-id',
+      status: 'cancelled',
+      error_message: 'Cancelled by user',
+      completed_at: expect.any(String),
+    }));
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'cancelled',
+      adId: 'test-ad-id',
+      message: 'Cancelled by user',
+    }));
+  });
+
+  it('passes the cancel AbortSignal through OpenAI copy calls and Gemini image generation', async () => {
+    const controller = new AbortController();
+
+    await generateAd('project-1', {
+      uploadedImageBase64: Buffer.from('uploaded-layout').toString('base64'),
+      uploadedImageMimeType: 'image/png',
+      headline: 'Headline',
+      bodyCopy: 'Body',
+      cancelSignal: controller.signal,
+    });
+
+    expect(mocks.chat).toHaveBeenCalledWith(
+      expect.any(Array),
+      'gpt-5.2',
+      expect.objectContaining({ signal: controller.signal })
+    );
+    expect(mocks.chatWithImage).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      'gpt-5.2',
+      expect.objectContaining({ signal: controller.signal })
+    );
+    expect(mocks.geminiGenerateImage).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      null,
+      expect.objectContaining({ cancelSignal: controller.signal })
+    );
+  });
 });

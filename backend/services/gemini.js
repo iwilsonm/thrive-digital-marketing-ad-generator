@@ -36,6 +36,7 @@ function classifyGeminiError(err, timedOut = false) {
   const status = err?.status || err?.statusCode || err?.httpCode;
   const message = String(err?.message || '');
   const providerText = getProviderErrorText(err);
+  if (err?.code === 'GEMINI_CANCELLED' || err?.geminiErrorClass === 'cancelled') return 'cancelled';
   if (timedOut || err?.code === 'GEMINI_ATTEMPT_TIMEOUT' || err?.name === 'AbortError') return 'timeout';
   if (err?.code === 'GEMINI_NO_IMAGE_RETURNED' || err?.geminiErrorClass === 'no_image_returned') return 'no_image_returned';
   if (status === 503 || /UNAVAILABLE|high demand|experiencing/i.test(`${message} ${providerText}`)) return 'provider_unavailable';
@@ -92,6 +93,34 @@ function buildTimeoutError(timeoutMs) {
   const err = new Error(`Gemini image generation attempt timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
   err.code = 'GEMINI_ATTEMPT_TIMEOUT';
   return err;
+}
+
+function buildCancelledError() {
+  const err = new Error('Cancelled by user');
+  err.code = 'GEMINI_CANCELLED';
+  err.geminiErrorClass = 'cancelled';
+  return err;
+}
+
+function combineAbortSignals(signals) {
+  const filtered = signals.filter(Boolean);
+  if (filtered.length === 0) return undefined;
+  if (filtered.length === 1) return filtered[0];
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') {
+    return AbortSignal.any(filtered);
+  }
+  const controller = new AbortController();
+  const abort = (signal) => {
+    try { controller.abort(signal.reason); } catch { controller.abort(); }
+  };
+  for (const signal of filtered) {
+    if (signal.aborted) {
+      abort(signal);
+      break;
+    }
+    signal.addEventListener('abort', () => abort(signal), { once: true });
+  }
+  return controller.signal;
 }
 
 function attachImageAttempts(err, attempts) {
@@ -159,27 +188,37 @@ function extractGeminiImage(response) {
   return { imageBuffer, mimeType, textResponse };
 }
 
-async function generateContentWithAttemptTimeout(ai, params, timeoutMs) {
-  const controller = new AbortController();
+async function generateContentWithAttemptTimeout(ai, params, timeoutMs, cancelSignal = null) {
+  const timeoutController = new AbortController();
+  const abortSignal = combineAbortSignals([timeoutController.signal, cancelSignal]);
   let timeoutId = null;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
       const timeoutErr = buildTimeoutError(timeoutMs);
-      try { controller.abort(timeoutErr); } catch { controller.abort(); }
+      try { timeoutController.abort(timeoutErr); } catch { timeoutController.abort(); }
       reject(timeoutErr);
     }, timeoutMs);
   });
+  const cancelPromise = cancelSignal
+    ? new Promise((_, reject) => {
+      if (cancelSignal.aborted) {
+        reject(buildCancelledError());
+        return;
+      }
+      cancelSignal.addEventListener('abort', () => reject(buildCancelledError()), { once: true });
+    })
+    : null;
 
   const requestPromise = ai.models.generateContent({
     ...params,
     config: {
       ...(params.config || {}),
-      abortSignal: controller.signal,
+      abortSignal,
     },
   });
 
   try {
-    return await Promise.race([requestPromise, timeoutPromise]);
+    return await Promise.race([requestPromise, timeoutPromise, cancelPromise].filter(Boolean));
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
@@ -195,7 +234,7 @@ async function generateContentWithAttemptTimeout(ai, params, timeoutMs) {
  * @param {object} [options] - { projectId, operation, isBatch, imageModel } for cost tracking + model selection
  */
 export async function generateImage(prompt, aspectRatio = '1:1', productImage = null, options = {}) {
-  const { projectId = null, operation = 'image_generation', isBatch = false, imageModel, imageSize } = options;
+  const { projectId = null, operation = 'image_generation', isBatch = false, imageModel, imageSize, cancelSignal = null } = options;
   const ai = await getClient();
   const imageAttempts = [];
 
@@ -263,7 +302,8 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
                   imageSize: imageSize || (!isProModel ? '512' : undefined),
                 }
               }
-            }, GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS);
+            }, GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS, cancelSignal);
+            if (cancelSignal?.aborted) throw buildCancelledError();
             const extracted = extractGeminiImage(result);
             if (!extracted.imageBuffer) {
               throw buildNoImageError(result);
@@ -279,7 +319,7 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
             });
             return result;
           } catch (err) {
-            timedOut = err?.code === 'GEMINI_ATTEMPT_TIMEOUT' || err?.name === 'AbortError';
+            timedOut = err?.code === 'GEMINI_ATTEMPT_TIMEOUT' || (err?.name === 'AbortError' && !cancelSignal?.aborted);
             const errorClass = classifyGeminiError(err, timedOut);
             if (errorClass === 'provider_unavailable' && !err.retryAfter) {
               err.retryAfter = 3; // retry.js adds a 2s buffer, giving a short 5s backoff.
@@ -323,6 +363,9 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
     const providerErrorText = getProviderErrorText(err);
 
     // Clean up Gemini API error messages — the SDK returns raw JSON as the message string
+    if (err.geminiErrorClass === 'cancelled' || err.code === 'GEMINI_CANCELLED') {
+      throw attachImageAttempts(buildCancelledError(), imageAttempts);
+    }
     if (err.message?.includes('INVALID_ARGUMENT')) {
       throw attachImageAttempts(new Error('Image generation temporarily unavailable (Gemini API capacity issue). Please try again in a moment.'), imageAttempts);
     }

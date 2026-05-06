@@ -1,5 +1,11 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — User-cancellable ad generation
+
+- Added user-cancellable single-ad generation with a new `/cancel` endpoint, `cancellation_requested_at` and `cancelled_by` fields on `ad_creatives`, and step-boundary cancellation polling in the ad generator.
+- Threaded cancellation through long-running provider calls: OpenAI copy generation now receives an abort signal, and Gemini image generation composes user cancellation with its existing per-attempt timeout signal.
+- The Ad Studio queue now shows a Cancel button for in-flight ad rows and transitions cancelled work to a terminal `cancelled` state without involving batch generation.
+
 ## 2026-05-07 — Fix pinned projects initial sidebar load
 
 - Fixed pinned projects not appearing in the sidebar after initial login when the layout's first pinned-project fetch runs before auth/settings data is stable.
