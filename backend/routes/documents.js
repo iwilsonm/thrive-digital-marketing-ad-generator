@@ -130,11 +130,7 @@ router.get('/:projectId/research-prompts', async (req, res) => {
       {
         step: 1,
         title: 'Step 1: Analyze Your Sales Page',
-        instruction: 'Start a new conversation in ChatGPT or Claude. Attach a PDF of your current PDP or sales page along with this prompt. To create the PDF, open the page in your browser, press Cmd+P on Mac or Ctrl+P on Windows, choose Save as PDF, then attach that file.',
-        tip: {
-          text: 'Recommended: use your browser\'s Print -> Save as PDF. If that does not capture the page well, you can search for a free web page to PDF converter and use it only for public, non-sensitive pages. For private pages, use browser Save as PDF or copy/paste the page text manually.'
-        },
-        alert: 'You need to attach a PDF of your PDP or sales page to the ChatGPT or Claude message along with this prompt. Without it, the AI has nothing visual or page-specific to analyze.',
+        instruction: 'Start a new conversation in ChatGPT or Claude and paste the prompt below. The product description you provided when creating this project is already included in the prompt — no attachment needed.',
         prompt: prompt1_AnalyzeSalesPage(
           project.product_description,
           project.sales_page_content

@@ -1,5 +1,10 @@
 # Thrive Campaigns — Changelog
 
+## 2026-05-06 — Drop manual research PDF attachment guidance
+
+- Drop PDF-attachment guidance from manual research walkthrough Step 1; product description is now in the prompt body itself.
+- Removed the Step 1 tip and alert fields so the frontend no longer shows the obsolete amber warning block.
+
 ## 2026-05-06 — Restore project sales_page_content persistence
 
 - Restore `sales_page_content` persistence on projects table — fixes deep research input gap. Schema + mapper + whitelist + POST handler updated. Convex prod deployed.
