@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 40" role="img" aria-label="Thrive Campaigns">
-  <g fill="currentColor">
-    <path d="M20 4.5C28.56 4.5 35.5 11.44 35.5 20S28.56 35.5 20 35.5 4.5 28.56 4.5 20 11.44 4.5 20 4.5Zm0 4.1A11.4 11.4 0 1 0 31.4 20 11.41 11.41 0 0 0 20 8.6Z"/>
-    <path d="M29.28 12.42c-7.04.16-12.78 2.31-16.28 6.11-1.93 2.1-2.93 4.69-3.05 7.66 3.07-.06 5.82-1.09 7.9-3.04 2.35-2.19 3.52-5.16 3.82-8.92a20.67 20.67 0 0 1 7.61-1.81Z"/>
-    <path d="M15.58 26.42c3.01-5.68 6.92-9.52 12.41-12.22-4.58 3.39-7.49 7.42-9.23 12.34l-3.18-.12Z"/>
-    <text x="48" y="25.8" font-family="Inter, DM Sans, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="18" font-weight="650" letter-spacing="0">Thrive Campaigns</text>
-  </g>
-</svg>

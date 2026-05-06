@@ -459,7 +459,7 @@ export default function MetaConnectPanel({ projectId }) {
           {error && <div className="mt-3 text-sm text-ed-rust">{error}</div>}
           <p className="mt-3 text-xs text-ed-ink3">
             Requires Meta App ID + Secret in global Settings. Create one Facebook App once at
-            developers.facebook.com; Thrive Campaigns reuses it for every project's OAuth.
+            developers.facebook.com; ThriveCampaigns reuses it for every project's OAuth.
           </p>
         </div>
       )}
@@ -536,7 +536,7 @@ export default function MetaConnectPanel({ projectId }) {
                 {pagesLoading && <div className="text-xs text-ed-ink3">Loading Pages…</div>}
                 {!pagesLoading && pages.length === 0 && (
                   <div className="text-xs text-ed-ink3 bg-cream rounded p-2">
-                    No Pages are visible to Thrive Campaigns for this Meta connection. Posting requires Page-list permission plus admin/editor access to at least one Facebook Page. Reconnect Meta after approving the Page-list permission, then select the Page here.
+                    No Pages are visible to ThriveCampaigns for this Meta connection. Posting requires Page-list permission plus admin/editor access to at least one Facebook Page. Reconnect Meta after approving the Page-list permission, then select the Page here.
                   </div>
                 )}
                 {!pagesLoading && pages.length > 0 && (

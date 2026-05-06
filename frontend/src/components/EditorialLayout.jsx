@@ -154,7 +154,7 @@ export default function EditorialLayout() {
         {/* Mobile topbar */}
         <div className="md:hidden flex items-center justify-between px-4 h-12 bg-ed-surface border-b border-ed-line flex-shrink-0">
           <Link to={isPoster ? '/projects' : '/'} className="flex items-center">
-            <img src="/logo-full.svg" alt="Thrive Campaigns" className="h-8" />
+            <img src="/logo-full.png" alt="ThriveCampaigns" className="h-8" />
           </Link>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
@@ -212,8 +212,8 @@ function SidebarContent({
         className={`flex items-center no-underline ${collapsed ? 'justify-center' : 'px-2 pb-1'}`}
       >
         <img
-          src={collapsed ? '/logo-mark.svg' : '/logo-full.svg'}
-          alt="Thrive Campaigns"
+          src={collapsed ? '/logo-mark.png' : '/logo-full.png'}
+          alt="ThriveCampaigns"
           className={`flex-shrink-0 ${collapsed ? 'h-8 w-8' : 'h-9 w-auto max-w-[180px]'}`}
         />
       </Link>

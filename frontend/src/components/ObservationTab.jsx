@@ -598,7 +598,7 @@ export default function ObservationTab({ projectId, project }) {
           {showUnlinked && (
             <div className="px-5 pb-4 space-y-3">
       <p className="text-[11px] text-ed-ink3 mb-3">
-        These Meta ad sets are not linked to Thrive Campaigns. Link them to start observation, or archive rows you do not want to track.
+        These Meta ad sets are not linked to ThriveCampaigns. Link them to start observation, or archive rows you do not want to track.
       </p>
               {unlinkedError && (
                 <div className="p-4 rounded-lg bg-ed-rust/5 border border-ed-rust/30 text-[12px] text-ed-rust">

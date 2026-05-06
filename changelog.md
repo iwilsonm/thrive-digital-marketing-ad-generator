@@ -1,4 +1,8 @@
-# Thrive Campaigns — Changelog
+# ThriveCampaigns — Changelog
+
+## 2026-05-06 — ThriveCampaigns brand asset
+
+- Logos replaced with actual ThriveCampaigns brand PNG (green logomark + black wordmark on transparent). User-visible brand string flipped to one-word "ThriveCampaigns" to match the asset. Internal slugs unchanged.
 
 ## 2026-05-06 — Settings tests persist successful API keys
 

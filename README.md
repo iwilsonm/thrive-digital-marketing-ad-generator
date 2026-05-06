@@ -1,6 +1,6 @@
-# Thrive Campaigns
+# ThriveCampaigns
 
-Single-tenant ad generation and deployment software for Thrive Campaigns.
+Single-tenant ad generation and deployment software for ThriveCampaigns.
 
 ## Live App
 
@@ -10,7 +10,7 @@ Single-tenant ad generation and deployment software for Thrive Campaigns.
 
 ## Local Convex Binding
 
-Local development uses the dedicated Thrive Campaigns Convex dev deployment in `.env.local` and `backend/.env.local`:
+Local development uses the dedicated ThriveCampaigns Convex dev deployment in `.env.local` and `backend/.env.local`:
 
 - `CONVEX_DEPLOYMENT`
 - `CONVEX_URL`

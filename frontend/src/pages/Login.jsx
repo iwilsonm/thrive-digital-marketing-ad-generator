@@ -67,7 +67,7 @@ export default function Login() {
       <div className="w-full max-w-sm fade-in">
         <div className="ed-card p-8">
           <div className="text-center mb-6">
-            <img src="/logo-full.svg" alt="Thrive Campaigns" className="h-12 mx-auto mb-4" />
+            <img src="/logo-full.png" alt="ThriveCampaigns" className="h-12 mx-auto mb-4" />
             <p className="text-[13px] text-ed-ink2 mt-1">
               {isSetup ? 'Create your admin account to get started' : 'Sign in to continue'}
             </p>

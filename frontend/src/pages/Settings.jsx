@@ -971,7 +971,7 @@ export default function Settings() {
             <details className="rounded-xl border border-ed-line bg-ed-bg/60 px-4 py-3">
               <summary className="cursor-pointer text-[13px] font-medium text-ed-ink">How to set up Meta API access</summary>
               <div className="mt-3 space-y-2 text-[12px] leading-relaxed text-ed-ink2">
-                <p>Create one Meta developer app for Thrive Campaigns, then reuse it for every project connection.</p>
+                <p>Create one Meta developer app for ThriveCampaigns, then reuse it for every project connection.</p>
                 <ol className="list-decimal pl-4 space-y-1">
                   <li>Create or open a Meta app at <a className="underline" href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer">developers.facebook.com/apps</a>.</li>
                   <li>Add Facebook Login for Business and the Marketing API product if Meta prompts for products.</li>

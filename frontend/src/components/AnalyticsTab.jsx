@@ -1052,7 +1052,7 @@ export default function AnalyticsTab({ projectId, project }) {
                                 {row.name || '—'}
                               </button>
                               {row.cf_source && (
-                                <span title="Created via Thrive Campaigns" className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent flex-shrink-0">TM</span>
+                                <span title="Created via ThriveCampaigns" className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent flex-shrink-0">TM</span>
                               )}
                             </div>
                           </td>
