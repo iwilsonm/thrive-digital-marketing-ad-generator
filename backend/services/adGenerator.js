@@ -61,6 +61,7 @@ function serializeImageAttempts(attempts) {
     duration_ms: Number.isFinite(attempt.duration_ms) ? attempt.duration_ms : null,
     error_class: attempt.error_class || 'unknown',
     error_message: attempt.error_message || null,
+    queue_depth_at_start: Number.isFinite(attempt.queue_depth_at_start) ? attempt.queue_depth_at_start : null,
   })));
 }
 
@@ -733,7 +734,7 @@ async function generateAndSaveImage({ adId, projectId, project, imagePrompt, asp
     : `Generating image with ${modelLabel}...`, progress: 70 });
 
   const { imageBuffer, mimeType: imgMime, imageAttempts } = await imageGen(imagePrompt, aspectRatio, productImage, {
-    projectId, operation: 'ad_image_generation', imageModel, imageSize: '2K',
+    projectId, operation: 'ad_image_generation', imageModel, imageSize: '1K',
   });
 
   emitProgress(emit, adId, { status: 'generating_image', message: 'Uploading image...', progress: 90 });

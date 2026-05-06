@@ -1,5 +1,12 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-06 — Harden Gemini image generation
+
+- Single-ad Gemini renders now request `1K` images instead of `2K`, and each synchronous Gemini attempt can run up to 180 seconds before aborting.
+- Gemini 503/high-demand responses are classified as `provider_unavailable`, retried once with a short backoff, and surfaced with a distinct user-facing message.
+- No-image Gemini responses are classified as `no_image_returned`, retried once, and persisted with finish reason, part types, text excerpt, safety ratings, and queue-depth diagnostics.
+- Added a legacy `gemini-3-pro` alias to route to Nano Banana Pro explicitly, and stored Gemini attempt telemetry now includes queue depth at limiter entry.
+
 ## 2026-05-06 — OpenAI and Anthropic quota error parity
 
 - OpenAI and Anthropic wrappers now distinguish billing/account-state quota failures from transient rate limits, mirroring the Gemini zero-quota behavior.

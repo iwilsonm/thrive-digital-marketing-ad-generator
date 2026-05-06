@@ -126,6 +126,7 @@ const geminiSemaphore = new AsyncSemaphore(3);
  */
 export async function withGeminiLimit(fn, label = '') {
   const queuePos = geminiSemaphore.pending;
+  const queueDepthAtStart = geminiSemaphore.active + geminiSemaphore.pending;
   if (queuePos > 0) {
     console.log(`[GeminiLimit] ${label} Queued (position ${queuePos}, ${geminiSemaphore.active} active)`);
   }
@@ -133,7 +134,7 @@ export async function withGeminiLimit(fn, label = '') {
   return geminiSemaphore.run(async () => {
     console.log(`[GeminiLimit] ${label} Starting image generation...`);
     try {
-      const result = await fn();
+      const result = await fn({ queueDepthAtStart });
       return result;
     } finally {
       console.log(`[GeminiLimit] ${label} Done. ${geminiSemaphore.pending} waiting.`);

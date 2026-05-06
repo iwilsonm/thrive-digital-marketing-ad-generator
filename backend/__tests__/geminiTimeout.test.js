@@ -21,7 +21,7 @@ vi.mock('../convexClient.js', () => ({
 }));
 
 vi.mock('../services/rateLimiter.js', () => ({
-  withGeminiLimit: vi.fn((fn) => fn()),
+  withGeminiLimit: vi.fn((fn) => fn({ queueDepthAtStart: 4 })),
 }));
 
 vi.mock('../services/costTracker.js', () => ({
@@ -77,10 +77,11 @@ describe('Gemini synchronous image attempt timeout', () => {
       error_class: 'success',
       error_message: null,
       duration_ms: expect.any(Number),
+      queue_depth_at_start: 4,
     })]);
   });
 
-  it('aborts a hung attempt at 90 seconds, retries once, and returns diagnostics', async () => {
+  it('aborts a hung attempt at 180 seconds, retries once, and returns diagnostics', async () => {
     vi.useFakeTimers();
     mocks.generateContent
       .mockImplementationOnce(() => new Promise(() => {}))
@@ -92,7 +93,7 @@ describe('Gemini synchronous image attempt timeout', () => {
       operation: 'ad_image_generation',
     });
 
-    await vi.advanceTimersByTimeAsync(90_000);
+    await vi.advanceTimersByTimeAsync(180_000);
     await vi.advanceTimersByTimeAsync(2_000);
 
     const result = await generation;
@@ -102,6 +103,7 @@ describe('Gemini synchronous image attempt timeout', () => {
     expect(result.imageAttempts[0]).toMatchObject({
       attempt_number: 1,
       error_class: 'timeout',
+      queue_depth_at_start: 4,
     });
     expect(result.imageAttempts[1]).toMatchObject({
       attempt_number: 2,
@@ -126,11 +128,26 @@ describe('Gemini synchronous image attempt timeout', () => {
       ],
     });
 
-    await vi.advanceTimersByTimeAsync(90_000);
+    await vi.advanceTimersByTimeAsync(180_000);
     await vi.advanceTimersByTimeAsync(2_000);
-    await vi.advanceTimersByTimeAsync(90_000);
+    await vi.advanceTimersByTimeAsync(180_000);
 
     await expectation;
     expect(mocks.generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps the legacy gemini-3-pro alias to Nano Banana Pro', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.generateContent.mockResolvedValueOnce(successResponse());
+
+    await generateImage('prompt', '1:1', null, {
+      projectId: 'project-1',
+      imageModel: 'gemini-3-pro',
+      operation: 'ad_image_generation',
+    });
+
+    expect(mocks.generateContent.mock.calls[0][0].model).toBe('gemini-3-pro-image-preview');
+    expect(mocks.generateContent.mock.calls[0][0].config.imageConfig.imageSize).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('legacy image model alias "gemini-3-pro"'));
   });
 });

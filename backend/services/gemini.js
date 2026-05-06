@@ -6,8 +6,9 @@ import { logGeminiCost } from './costTracker.js';
 
 let client = null;
 let lastApiKey = null;
-const GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS = 90 * 1000;
+const GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS = 180 * 1000;
 const GEMINI_IMAGE_MAX_ATTEMPTS = 2;
+const NO_IMAGE_MESSAGE = "Gemini returned a response without an image. This usually means the prompt was refused or hit a content filter. Check the ad's diagnostic detail for finish reason and safety ratings, or try a different prompt.";
 
 async function getClient() {
   const apiKey = await getSetting('gemini_api_key');
@@ -24,6 +25,7 @@ async function getClient() {
 const GEMINI_MODELS = {
   'nano-banana-pro': 'gemini-3-pro-image-preview',
   'nano-banana-2': 'gemini-3.1-flash-image-preview',
+  'gemini-3-pro': 'gemini-3-pro-image-preview',
 };
 
 function durationMs(startedMs) {
@@ -33,7 +35,10 @@ function durationMs(startedMs) {
 function classifyGeminiError(err, timedOut = false) {
   const status = err?.status || err?.statusCode || err?.httpCode;
   const message = String(err?.message || '');
+  const providerText = getProviderErrorText(err);
   if (timedOut || err?.code === 'GEMINI_ATTEMPT_TIMEOUT' || err?.name === 'AbortError') return 'timeout';
+  if (err?.code === 'GEMINI_NO_IMAGE_RETURNED' || err?.geminiErrorClass === 'no_image_returned') return 'no_image_returned';
+  if (status === 503 || /UNAVAILABLE|high demand|experiencing/i.test(`${message} ${providerText}`)) return 'provider_unavailable';
   if (status === 429 || err?.code === 'RESOURCE_EXHAUSTED' || /RESOURCE_EXHAUSTED|rate.?limit|quota/i.test(message)) return 'rate_limit';
   if (status >= 400) return 'api_error';
   if (err?.code && ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED', 'UND_ERR_CONNECT_TIMEOUT'].includes(err.code)) return 'fetch_failed';
@@ -102,6 +107,58 @@ function attachImageAttempts(err, attempts) {
   return err;
 }
 
+function getPartTypes(part) {
+  if (!part || typeof part !== 'object') return ['unknown'];
+  return Object.keys(part).sort();
+}
+
+function summarizeNoImageResponse(response) {
+  const candidate = response?.candidates?.[0] || {};
+  const parts = candidate.content?.parts || [];
+  const textExcerpt = parts
+    .map(part => (typeof part?.text === 'string' ? part.text : ''))
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+
+  return {
+    finishReason: candidate.finishReason || null,
+    partTypes: parts.map(getPartTypes),
+    textExcerpt: textExcerpt || null,
+    safetyRatings: candidate.safetyRatings || null,
+  };
+}
+
+function buildNoImageError(response) {
+  const err = new Error(NO_IMAGE_MESSAGE);
+  err.code = 'GEMINI_NO_IMAGE_RETURNED';
+  err.geminiErrorClass = 'no_image_returned';
+  err.noImageDiagnostics = summarizeNoImageResponse(response);
+  return err;
+}
+
+function extractGeminiImage(response) {
+  let imageBuffer = null;
+  let mimeType = 'image/png';
+  let textResponse = '';
+
+  if (response.candidates && response.candidates[0]) {
+    const parts = response.candidates[0].content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData) {
+        imageBuffer = Buffer.from(part.inlineData.data, 'base64');
+        mimeType = part.inlineData.mimeType || 'image/png';
+      } else if (part.text) {
+        textResponse += part.text;
+      }
+    }
+  }
+
+  return { imageBuffer, mimeType, textResponse };
+}
+
 async function generateContentWithAttemptTimeout(ai, params, timeoutMs) {
   const controller = new AbortController();
   let timeoutId = null;
@@ -143,9 +200,13 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
   const imageAttempts = [];
 
   // Resolve model name — default to Nano Banana 2
+  if (imageModel === 'gemini-3-pro') {
+    console.warn('[Gemini] Received legacy image model alias "gemini-3-pro"; routing to Nano Banana Pro.');
+  }
   const modelId = GEMINI_MODELS[imageModel] || GEMINI_MODELS['nano-banana-2'];
-  const modelLabel = imageModel === 'nano-banana-pro' ? 'Nano Banana Pro' : 'Nano Banana 2';
-  const requestedImageSize = imageSize || (imageModel !== 'nano-banana-pro' ? '512' : '1K');
+  const isProModel = imageModel === 'nano-banana-pro' || imageModel === 'gemini-3-pro';
+  const modelLabel = isProModel ? 'Nano Banana Pro' : 'Nano Banana 2';
+  const requestedImageSize = imageSize || (!isProModel ? '512' : '1K');
 
   try {
     let contents;
@@ -168,6 +229,8 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
     const shouldRetryGemini = (err) => {
       const status = err.status || err.statusCode || err.httpCode;
       if (err.geminiErrorClass === 'timeout') return true;
+      if (err.geminiErrorClass === 'provider_unavailable') return true;
+      if (err.geminiErrorClass === 'no_image_returned') return true;
       // Retry 400 from Gemini (transient INVALID_ARGUMENT errors)
       if (status === 400 && err.message?.includes('INVALID_ARGUMENT')) return true;
       // Retry 429 (rate limit) and 5xx (server errors)
@@ -180,7 +243,7 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
     };
 
     const response = await withGeminiLimit(
-      () => withRetry(
+      ({ queueDepthAtStart } = {}) => withRetry(
         async () => {
           const attemptNumber = imageAttempts.length + 1;
           const startedAt = new Date().toISOString();
@@ -194,13 +257,17 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
                 responseModalities: ['TEXT', 'IMAGE'],
                 imageConfig: {
                   aspectRatio: aspectRatio || '1:1',
-                  // Caller can request a specific size (e.g. '2K' for ads).
+                  // Caller can request a specific size (e.g. '1K' or '2K' for ads).
                   // Default: 512 for Nano Banana 2, omit for Pro (defaults to 1K).
                   // Pro only supports 1K/2K/4K; 512 is not valid for Pro.
-                  imageSize: imageSize || (imageModel !== 'nano-banana-pro' ? '512' : undefined),
+                  imageSize: imageSize || (!isProModel ? '512' : undefined),
                 }
               }
             }, GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS);
+            const extracted = extractGeminiImage(result);
+            if (!extracted.imageBuffer) {
+              throw buildNoImageError(result);
+            }
             imageAttempts.push({
               attempt_number: attemptNumber,
               started_at: startedAt,
@@ -208,18 +275,26 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
               duration_ms: durationMs(startedMs),
               error_class: 'success',
               error_message: null,
+              queue_depth_at_start: Number.isFinite(queueDepthAtStart) ? queueDepthAtStart : null,
             });
             return result;
           } catch (err) {
             timedOut = err?.code === 'GEMINI_ATTEMPT_TIMEOUT' || err?.name === 'AbortError';
             const errorClass = classifyGeminiError(err, timedOut);
+            if (errorClass === 'provider_unavailable' && !err.retryAfter) {
+              err.retryAfter = 3; // retry.js adds a 2s buffer, giving a short 5s backoff.
+            }
+            const attemptMessage = errorClass === 'no_image_returned'
+              ? JSON.stringify(err.noImageDiagnostics || {})
+              : (err?.message || errorClass);
             imageAttempts.push({
               attempt_number: attemptNumber,
               started_at: startedAt,
               ended_at: new Date().toISOString(),
               duration_ms: durationMs(startedMs),
               error_class: errorClass,
-              error_message: sanitizeAttemptMessage(err?.message || errorClass),
+              error_message: sanitizeAttemptMessage(attemptMessage),
+              queue_depth_at_start: Number.isFinite(queueDepthAtStart) ? queueDepthAtStart : null,
             });
             if (errorClass === 'timeout') {
               console.warn(`[Gemini ${modelLabel}] Attempt ${attemptNumber}/${GEMINI_IMAGE_MAX_ATTEMPTS} aborted after ${Math.round(GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS / 1000)}s.`);
@@ -238,25 +313,7 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
       `[Gemini ${modelLabel} ${aspectRatio || '1:1'}]`
     );
 
-    let imageBuffer = null;
-    let mimeType = 'image/png';
-    let textResponse = '';
-
-    if (response.candidates && response.candidates[0]) {
-      const parts = response.candidates[0].content?.parts || [];
-      for (const part of parts) {
-        if (part.inlineData) {
-          imageBuffer = Buffer.from(part.inlineData.data, 'base64');
-          mimeType = part.inlineData.mimeType || 'image/png';
-        } else if (part.text) {
-          textResponse += part.text;
-        }
-      }
-    }
-
-    if (!imageBuffer) {
-      throw new Error(`${modelLabel} did not return an image. The model may have refused the prompt or encountered an error.`);
-    }
+    const { imageBuffer, mimeType, textResponse } = extractGeminiImage(response);
 
     // Auto-log Gemini cost (fire-and-forget)
     logGeminiCost(projectId, 1, requestedImageSize, isBatch, operation).catch(() => {});
@@ -274,6 +331,12 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
         throw attachImageAttempts(new Error("Gemini image generation requires a paid Google AI Studio tier — your current API key's project shows zero quota for this model. Enable billing at https://aistudio.google.com or switch the image model in Settings."), imageAttempts);
       }
       throw attachImageAttempts(new Error('Image generation rate limit reached. Please wait a moment and try again.'), imageAttempts);
+    }
+    if (err.geminiErrorClass === 'provider_unavailable') {
+      throw attachImageAttempts(new Error('Gemini is currently busy (high demand). Retrying… if this persists, try again in a minute or two.'), imageAttempts);
+    }
+    if (err.geminiErrorClass === 'no_image_returned' || err.code === 'GEMINI_NO_IMAGE_RETURNED') {
+      throw attachImageAttempts(new Error(NO_IMAGE_MESSAGE), imageAttempts);
     }
     if (err.geminiErrorClass === 'timeout' || err.code === 'GEMINI_ATTEMPT_TIMEOUT') {
       throw attachImageAttempts(new Error('Image generation timed out while waiting for Gemini. Please retry this ad.'), imageAttempts);
