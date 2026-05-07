@@ -1,5 +1,11 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Stage 1 headline specificity filter
+
+- Stage 1 candidate generation now includes a stricter angle-signal requirement, dynamic generic-rejection examples, and the angle's avoid list so candidates must reflect the selected angle's buyer, scene, symptom, objection, current belief, or frame.
+- Batch headline selection now rejects candidates with zero angle signal and generic offer/category headlines like "Free Live Webinar" or "FINDING YOUR CALLING" unless the visible headline also includes angle-specific language.
+- Verified with a small production batch on Christian Counsellor Webinar: 13 generated, 5 scene rejects, angle-signal filter active, 3 selected, 3/3 saved; no generic offer/category headline slipped through.
+
 ## 2026-05-07 — Director angle hydration fix verified
 
 - Fixed Director angle hydration: `runDirectorForProject` now hydrates the full `conductor_angles` row before creating a batch, so `batch.angle`, `angle_prompt`, and `angle_brief` carry the selected angle's description and structured fields instead of only name/externalId.
