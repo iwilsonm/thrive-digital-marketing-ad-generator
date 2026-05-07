@@ -12,11 +12,15 @@ const mockGetConductorPlaybook = vi.fn();
 const mockCreateConductorRun = vi.fn();
 const mockUpdateConductorRun = vi.fn();
 const mockGetConductorRuns = vi.fn();
+const mockGetConductorSlotsByPostingDay = vi.fn();
+const mockCreateConductorSlot = vi.fn();
+const mockUpdateConductorSlot = vi.fn();
 const mockCreateBatchJob = vi.fn();
 const mockGetBatchJob = vi.fn();
 const mockUpdateBatchJob = vi.fn();
 const mockGetAdsByBatchId = vi.fn();
 const mockGetAd = vi.fn();
+const mockGetAdSetsByProject = vi.fn();
 const mockGetFlexAdsByProject = vi.fn();
 const mockGetBatchesByProject = vi.fn();
 const mockGetProject = vi.fn();
@@ -56,11 +60,15 @@ vi.mock('../convexClient.js', () => ({
   createConductorRun: (...args) => mockCreateConductorRun(...args),
   updateConductorRun: (...args) => mockUpdateConductorRun(...args),
   getConductorRuns: (...args) => mockGetConductorRuns(...args),
+  getConductorSlotsByPostingDay: (...args) => mockGetConductorSlotsByPostingDay(...args),
+  createConductorSlot: (...args) => mockCreateConductorSlot(...args),
+  updateConductorSlot: (...args) => mockUpdateConductorSlot(...args),
   createBatchJob: (...args) => mockCreateBatchJob(...args),
   getBatchJob: (...args) => mockGetBatchJob(...args),
   updateBatchJob: (...args) => mockUpdateBatchJob(...args),
   getAdsByBatchId: (...args) => mockGetAdsByBatchId(...args),
   getAd: (...args) => mockGetAd(...args),
+  getAdSetsByProject: (...args) => mockGetAdSetsByProject(...args),
   getFlexAdsByProject: (...args) => mockGetFlexAdsByProject(...args),
   getBatchesByProject: (...args) => mockGetBatchesByProject(...args),
   getProject: (...args) => mockGetProject(...args),
@@ -230,6 +238,9 @@ describe('conductorEngine test-run pipeline', () => {
     mockUpdateConductorAngle.mockResolvedValue();
     mockCreateConductorRun.mockResolvedValue();
     mockUpdateConductorRun.mockResolvedValue();
+    mockGetConductorSlotsByPostingDay.mockResolvedValue([]);
+    mockCreateConductorSlot.mockResolvedValue();
+    mockUpdateConductorSlot.mockResolvedValue();
     mockCreateBatchJob.mockResolvedValue();
     mockRunBatch.mockResolvedValue();
     mockPollBatchJob.mockResolvedValue('completed');
@@ -242,6 +253,7 @@ describe('conductorEngine test-run pipeline', () => {
     mockHasStructuredBrief.mockReturnValue(false);
     mockBuildAngleBriefJSON.mockReturnValue({ frame: 'symptom-first' });
     mockGetFlexAdsByProject.mockResolvedValue([]);
+    mockGetAdSetsByProject.mockResolvedValue([]);
     mockGetBatchesByProject.mockResolvedValue([]);
     mockGetAllConductorConfigs.mockResolvedValue([]);
     mockGetSetting.mockImplementation(async (key) => ({
@@ -285,6 +297,7 @@ describe('conductorEngine test-run pipeline', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -1037,6 +1050,81 @@ describe('conductorEngine test-run pipeline', () => {
       total_ads_scored: 2,
       total_ads_passed: 1,
       failure_reason: expect.stringContaining('only 1/2 passed'),
+    }));
+  });
+
+  it('hydrates Director slot angles from the full conductor_angles row before creating a batch', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-06T21:00:00.000Z'));
+
+    const richAngle = makeAngle({
+      externalId: 'angle-rich-1',
+      name: 'Everyone Brings Their Pain To Her',
+      description: 'A calling angle about being the person others already bring pain to before formal training.',
+      prompt_hints: 'Center the weight of being trusted before feeling equipped.',
+      frame: 'calling-without-credentials',
+      core_buyer: 'Christians who are already trusted with painful conversations',
+      symptom_pattern: 'People bring heavy stories to them, but they feel unsure how to respond wisely',
+      times_used: 2,
+    });
+    mockGetConductorConfig.mockResolvedValue({
+      enabled: true,
+      daily_flex_target: 1,
+      ads_per_batch: 6,
+    });
+    mockGetActiveConductorAngles.mockResolvedValue([richAngle]);
+    mockGetConductorSlotsByPostingDay.mockResolvedValue([{
+      id: 'slot-1',
+      posting_day: '2026-05-08',
+      slot_index: 0,
+      angle_name: richAngle.name,
+      angle_external_id: richAngle.externalId,
+      status: 'reserved',
+      batch_ids: '[]',
+      attempt_count: 0,
+      failure_reason: '',
+    }]);
+    mockHasStructuredBrief.mockImplementation((angle) => Boolean(angle.frame || angle.core_buyer));
+    mockBuildStructuredAnglePrompt.mockImplementation((angle) => [
+      angle.name,
+      angle.description,
+      angle.core_buyer,
+      angle.symptom_pattern,
+    ].filter(Boolean).join('\n'));
+    mockBuildAngleBriefJSON.mockImplementation((angle) => ({
+      name: angle.name,
+      description: angle.description,
+      frame: angle.frame,
+      core_buyer: angle.core_buyer,
+      symptom_pattern: angle.symptom_pattern,
+    }));
+
+    const { runDirectorForProject } = await importConductorEngine();
+    const result = await runDirectorForProject('proj-1', 'manual');
+
+    expect(result.batches_created).toBe(1);
+    expect(mockCreateBatchJob).toHaveBeenCalledTimes(1);
+    const batchPayload = mockCreateBatchJob.mock.calls[0][0];
+    expect(batchPayload).toMatchObject({
+      angle_name: richAngle.name,
+      angle_prompt: expect.stringContaining(richAngle.description),
+      angle: expect.stringContaining(richAngle.core_buyer),
+    });
+    expect(batchPayload.angle_prompt).toContain('CREATIVE DIRECTION');
+    expect(batchPayload.angle_prompt).toContain(richAngle.prompt_hints);
+    expect(JSON.parse(batchPayload.angle_brief)).toMatchObject({
+      description: richAngle.description,
+      frame: richAngle.frame,
+      core_buyer: richAngle.core_buyer,
+      symptom_pattern: richAngle.symptom_pattern,
+    });
+    expect(mockBuildStructuredAnglePrompt).toHaveBeenCalledWith(expect.objectContaining({
+      externalId: richAngle.externalId,
+      description: richAngle.description,
+      core_buyer: richAngle.core_buyer,
+    }));
+    expect(mockUpdateConductorAngle).toHaveBeenCalledWith(richAngle.externalId, expect.objectContaining({
+      times_used: 3,
     }));
   });
 });

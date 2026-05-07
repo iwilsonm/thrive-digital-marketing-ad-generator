@@ -242,10 +242,7 @@ export async function runDirectorForProject(projectId, runType = 'manual') {
           continue;
         }
 
-        const angleInfo = {
-          name: workingSlot.angle_name,
-          externalId: workingSlot.angle_external_id,
-        };
+        const angleInfo = await hydrateAngleInfoForSlot(projectId, workingSlot);
         const batchId = uuidv4();
 
         const approvedSoFar = slotQaProgress?.passedCount || 0;
@@ -258,7 +255,7 @@ export async function runDirectorForProject(projectId, runType = 'manual') {
         if (hasStructuredBrief(angleInfo)) {
           anglePrompt = buildStructuredAnglePrompt(angleInfo);
         } else {
-          anglePrompt = angleInfo.description;
+          anglePrompt = angleInfo.description || angleInfo.name || 'General ad creative angle.';
         }
         if (angleInfo.prompt_hints) {
           anglePrompt += `\n\nCREATIVE DIRECTION:\n${angleInfo.prompt_hints}`;
@@ -710,6 +707,38 @@ function buildPostingDaySlotResult(slot) {
     failure_reason: slot.failure_reason || null,
     diagnostics_summary: slot.diagnostics_summary ? parseJSON(slot.diagnostics_summary, null) : null,
   };
+}
+
+function buildFallbackAngleInfoForSlot(slot) {
+  const name = slot?.angle_name || 'General';
+  return {
+    name,
+    externalId: slot?.angle_external_id || 'fallback',
+    description: name === 'General'
+      ? 'General ad creative angle.'
+      : `Director-selected angle: ${name}`,
+    prompt_hints: '',
+    times_used: 0,
+  };
+}
+
+async function hydrateAngleInfoForSlot(projectId, slot) {
+  const fallback = buildFallbackAngleInfoForSlot(slot);
+  try {
+    const angles = await getActiveConductorAngles(projectId);
+    const byExternalId = slot?.angle_external_id
+      ? angles.find(angle => angle.externalId === slot.angle_external_id)
+      : null;
+    if (byExternalId) return byExternalId;
+
+    const byName = slot?.angle_name
+      ? angles.find(angle => angle.name === slot.angle_name)
+      : null;
+    return byName || fallback;
+  } catch (err) {
+    console.warn(`[Director] Failed to hydrate angle "${fallback.name}" for slot ${slot?.id || 'unknown'}: ${err.message}`);
+    return fallback;
+  }
 }
 
 async function ensurePostingDaySlots(projectId, config, postingDay) {
