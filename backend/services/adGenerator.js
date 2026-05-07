@@ -1439,6 +1439,8 @@ export async function generateHeadlines(project, briefPacket, angle, count, angl
     }
     if (angleBrief.objection) parts.push(`OBJECTION TO ADDRESS: ${angleBrief.objection}`);
     if (angleBrief.failed_solutions) parts.push(`FAILED SOLUTIONS: ${angleBrief.failed_solutions}`);
+    if (angleBrief.current_belief) parts.push(`CURRENT BELIEF: ${angleBrief.current_belief}`);
+    if (angleBrief.emotional_state) parts.push(`EMOTIONAL STATE: ${angleBrief.emotional_state}`);
     if (angleBrief.desired_belief_shift) parts.push(`DESIRED BELIEF SHIFT: ${angleBrief.desired_belief_shift} — headlines should move the reader toward this belief.`);
     if (angleBrief.tone) parts.push(`TONE: ${angleBrief.tone}`);
     if (angleBrief.avoid_list) parts.push(`AVOID: ${angleBrief.avoid_list}`);
