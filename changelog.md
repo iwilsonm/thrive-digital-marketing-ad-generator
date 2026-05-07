@@ -1,5 +1,11 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Director enablement and batch prompt hardening
+
+- Seeded an active Creative Director config for the Christian Counsellor Webinar project and added a daily CRON_SECRET-gated `/api/cron/director` route at 12:00 UTC.
+- Removed DTC / women 55-75 hardcoded audience language from batch prompt generation; batch headlines, body context, and image prompts now derive audience context from the project summary, niche, and avatar/foundational docs.
+- Batch Gemini image generation now requests `1K` images, matching the single-ad reliability default.
+
 ## 2026-05-07 — Empty product description hardening
 
 - Populated `product_description` for the Christian Counsellor Webinar project in production Convex.

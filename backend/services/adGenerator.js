@@ -1102,6 +1102,52 @@ function extractBriefSection(briefPacket, sectionName) {
   return match ? match[1].trim() : '';
 }
 
+function compactPromptText(value, maxLength = 900) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function extractAvatarAudienceSnippet(source) {
+  const text = typeof source === 'string'
+    ? source
+    : source?.avatar?.content || source?.avatarContent || source?.avatar || '';
+  if (!text) return '';
+
+  const briefAudience = extractBriefSection(text, 'AVATAR IN THIS MOMENT');
+  if (briefAudience) return compactPromptText(briefAudience);
+
+  const headingPatterns = [
+    /(?:^|\n)#{1,3}\s*(?:Demographic & General Information|Demographics?|Target Audience|Avatar|Who They Are)[^\n]*\n([\s\S]*?)(?=\n#{1,3}\s+|$)/i,
+    /(?:^|\n)(?:Demographic & General Information|Demographics?|Target Audience|Avatar|Who They Are)[^\n]*\n([\s\S]*?)(?=\n[A-Z][A-Z\s/&-]{8,}\n|$)/i,
+  ];
+  for (const pattern of headingPatterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return compactPromptText(match[1]);
+  }
+
+  return compactPromptText(text, 900);
+}
+
+export function getProjectAudienceContext(project = {}, foundationalDocs = null) {
+  const brand = project?.brand_name || project?.name || 'the brand';
+  const product = compactPromptText(project?.product_description || '', 500);
+  const niche = compactPromptText(project?.niche || '', 160);
+  const avatarSnippet = extractAvatarAudienceSnippet(foundationalDocs);
+
+  const lines = [
+    `Brand: ${brand}${niche ? ` (${niche})` : ''}.`,
+    product ? `Offer/product: ${product}` : null,
+    avatarSnippet
+      ? `Audience from project docs: ${avatarSnippet}`
+      : 'Audience from project docs: use only the audience, beliefs, pain points, and context provided in the project materials.',
+    'Do not invent a default age range, demographic, product category, or niche that is not present in the project materials.',
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
 export const HEADLINE_LANES = {
   symptom_recognition: 'Open with a specific physical symptom the reader recognizes instantly.',
   oddly_specific_moment: 'Describe a hyper-specific moment, time, or sensation that feels uncannily real.',
@@ -1363,8 +1409,12 @@ export async function generateHeadlines(project, briefPacket, angle, count, angl
   const laneInstructions = laneAllocation
     .map(({ lane, count: laneCount }) => `- ${lane}: generate exactly ${laneCount} headline${laneCount === 1 ? '' : 's'}\n  ${HEADLINE_LANES[lane]}`)
     .join('\n');
+  const audienceContext = getProjectAudienceContext(project, briefPacket);
 
-  const prompt = `You are a world-class direct response copywriter writing Facebook ad headlines for health and wellness products targeting women 55-75. These women are skeptical, have been disappointed by other products, and need to feel safe, understood, and intrigued before they will engage.
+  const prompt = `You are a world-class direct response copywriter writing Facebook ad headlines for this specific project. Use the project materials below to understand who the audience is, what they want, and what would make them feel safe, understood, and intrigued before they engage.
+
+PROJECT AUDIENCE CONTEXT:
+${audienceContext}
 
 Your job is NOT to produce loosely varied headlines. Your job is to produce a diverse headline set where each hook feels meaningfully different in persuasion style, emotional entry point, and central claim.
 
@@ -1443,12 +1493,12 @@ Return ONLY valid JSON:
       "rank": 1,
       "headline": "the headline text",
       "hook_lane": "symptom_recognition",
-      "sub_angle": "late-night stiffness",
-      "scene_anchor": "back in bed after a bathroom trip and instantly awake",
-      "core_claim": "morning stiffness may come from sleep setup",
-      "target_symptom": "waking up stiff and sore",
+      "sub_angle": "decision clarity",
+      "scene_anchor": "stuck comparing options and unsure what to choose",
+      "core_claim": "the right next step can become clear",
+      "target_symptom": "uncertainty about choosing the wrong path",
       "emotional_entry": "recognition",
-      "desired_belief_shift": "this problem has a specific, fixable cause",
+      "desired_belief_shift": "I can make a wise decision with clearer information",
       "opening_pattern": "direct_symptom",
       "primary_emotion": "recognition",
       "word_count": 8,
@@ -1618,6 +1668,7 @@ export async function generateBodyCopies(project, briefPacket, headlines, angleB
   const quotes = extractBriefSection(briefPacket, 'RELEVANT QUOTES');
   const anchors = extractBriefSection(briefPacket, 'SPECIFICITY ANCHORS');
   const beliefs = extractBriefSection(briefPacket, 'RELEVANT BELIEFS');
+  const audienceContext = getProjectAudienceContext(project, briefPacket);
 
   // Build tone/avoid directives from structured brief
   let briefToneBlock = '';
@@ -1667,7 +1718,10 @@ export async function generateBodyCopies(project, briefPacket, headlines, angleB
 
     const prompt = `You are a direct response creative strategist writing compact creative context for image generation. This is NOT final Facebook primary text and should NOT be rendered verbatim inside the image. Final Meta primary texts are written later after images pass QA.
 
-Write for women 55-75 dealing with chronic pain, broken sleep, and morning stiffness. Your context is warm, specific, honest, and sounds like a real person — not a brand.
+Write for the audience described in this project, using the offer, avatar, and research context below. Your context is warm, specific, honest, and sounds like a real person — not a brand.
+
+PROJECT AUDIENCE CONTEXT:
+${audienceContext}
 
 BRAND: ${project.brand_name || project.name}
 PRODUCT: ${project.product_description || ''}
@@ -1697,7 +1751,7 @@ RULES FOR EVERY CREATIVE CONTEXT:
 
 2. MAXIMUM 45 WORDS. This is image-generation context, not Meta primary text.
 
-3. INCLUDE ONE SPECIFIC, CONCRETE DETAIL: a time of night (2-4am), a body part (hips, knees, shoulders), a failed solution (melatonin, expensive mattress), or a life moment (playing with grandkids, dreading bedtime). "Better sleep" or "less pain" do NOT count as specific.
+3. INCLUDE ONE SPECIFIC, CONCRETE DETAIL from the project materials: a setting, question, decision point, failed solution, objection, exact phrase, or life moment. Generic improvement claims do NOT count as specific.
 
 4. DO NOT REPEAT THE HEADLINE TEXT in the context.
 
@@ -1895,6 +1949,7 @@ Return JSON only:
 export async function generateImagePrompt(project, headline, bodyCopy, primaryEmotion, imageData, aspectRatio, angleBrief = null, headlineMeta = null, options = {}) {
   const documentaryMode = !!options.documentaryMode;
   const repairNotes = Array.isArray(options.repairNotes) ? options.repairNotes.filter(Boolean) : [];
+  const audienceContext = getProjectAudienceContext(project, options.audienceContextSource || null);
   // Build visual direction from structured angle brief
   let visualDirectionBlock = '';
   if (angleBrief && (angleBrief.scene || angleBrief.frame || angleBrief.tone)) {
@@ -1923,7 +1978,10 @@ export async function generateImagePrompt(project, headline, bodyCopy, primaryEm
   }
 
   const promptText = documentaryMode
-    ? `You are a creative director generating documentary-style image prompts for Meta ads aimed at women 55-75.
+    ? `You are a creative director generating documentary-style image prompts for Meta ads tailored to this project's audience.
+
+PROJECT AUDIENCE CONTEXT:
+${audienceContext}
 
 BRAND: ${project.brand_name || project.name}
 PRODUCT CONTEXT: ${project.product_description || ''}
@@ -1947,7 +2005,7 @@ Generate an image prompt that:
 
 1. Creates a pure documentary/lifestyle scene that visually expresses the headline and body copy without rendering any words.
 2. Centers the human moment, symptom pattern, and emotional state from the angle brief.
-3. Shows a realistic woman 55-75 in an authentic bedroom or home environment if the scene calls for it.
+3. Shows a realistic person, setting, or context that matches the project audience and the scene called for by the angle.
 4. Uses lighting, expression, posture, camera distance, and composition to communicate the exact frustration or relief in the copy.
 5. Prioritizes realism, intimacy, and specificity over polished ad-design aesthetics.
 6. Uses the specified aspect ratio: ${aspectRatio || '1:1'}
@@ -1961,7 +2019,10 @@ CRITICAL NEGATIVES:
 - NO split-screen or infographic composition
 
 Treat the approved copy as semantic direction only. The output should be a photorealistic visual scene, not a designed ad layout.`
-    : `You are a creative director generating prompts for text-to-image AI software. You create Facebook ad visuals for DTC health/wellness brands targeting women 55-75.
+    : `You are a creative director generating prompts for text-to-image AI software. You create Facebook ad visuals tailored to this project's specific offer, audience, and brand context.
+
+PROJECT AUDIENCE CONTEXT:
+${audienceContext}
 
 BRAND: ${project.brand_name || project.name}
 PRODUCT APPEARANCE: ${project.product_description || ''}
@@ -1997,7 +2058,7 @@ Generate an image prompt that:
 5. Places the brand name (${project.brand_name || project.name}) in a subtle position (footer, corner) matching the template
 6. Supports the emotional tone of the headline — the visual mood (colors, lighting, texture, casting, composition) should reinforce what the headline makes the reader feel and what belief shift it is trying to create. Skepticism angles get editorial/news-style treatments. Pain point angles get warm, empathetic tones. Relief angles get bright, calm aesthetics.
 7. Uses the specified aspect ratio: ${aspectRatio || '1:1'}
-8. Avoids generic stock photo aesthetics — aim for authentic, warm, realistic DTC ad quality that resonates with women 60-70
+8. Avoids generic stock photo aesthetics — aim for authentic, warm, realistic direct-response ad quality that resonates with the documented audience
 9. Prioritizes scroll-stopping contrast and clean, conversion-focused design
 10. Includes realistic product representation — not cartoonish or overly polished
 
@@ -2160,6 +2221,7 @@ function normalizePromptPackage(item, index, templateTextContract) {
  */
 export async function generateImagePromptsBatch(project, ads, imageData, aspectRatio, angleBrief = null, options = {}) {
   const documentaryMode = !!options.documentaryMode;
+  const audienceContext = getProjectAudienceContext(project, options.audienceContextSource || null);
   const templateTextContract = options.templateTextContract
     ? normalizeTemplateTextContract(options.templateTextContract, { documentaryMode })
     : await analyzeTemplateTextContract(project, imageData, aspectRatio, { documentaryMode });
@@ -2199,14 +2261,17 @@ PRIMARY EMOTION: ${ad.primary_emotion || 'curiosity'}${strategyBlock}`;
   }).join('\n\n');
 
   const modeInstruction = documentaryMode
-    ? `You are a creative director generating documentary-style image prompts for Meta ads aimed at women 55-75.
+    ? `You are a creative director generating documentary-style image prompts for Meta ads tailored to this project's audience.
 Generate pure documentary/lifestyle scenes that visually express each ad's copy without rendering any words.
 CRITICAL NEGATIVES: NO text overlays, NO logos, NO product unless the angle brief demands it, NO ad-template framing.`
-    : `You are a creative director generating prompts for text-to-image AI software. You create Facebook ad visuals for DTC health/wellness brands targeting women 55-75.
+    : `You are a creative director generating prompts for text-to-image AI software. You create Facebook ad visuals tailored to this project's specific offer, audience, and brand context.
 ${imageData ? 'Analyze the attached template image for layout, color palette, typography, and composition. Each prompt should recreate this style.' : ''}
 Each prompt must follow the TEMPLATE TEXT CONTRACT below. Generate the on-image copy needed for the template's visible text zones. Do not render the full Meta primary-text paragraph inside the image unless the template contract explicitly contains a long body/testimonial zone.`;
 
   const promptText = `${modeInstruction}
+
+PROJECT AUDIENCE CONTEXT:
+${audienceContext}
 
 BRAND: ${project.brand_name || project.name}
 PRODUCT: ${project.product_description || ''}
@@ -2308,6 +2373,7 @@ export async function repairBodyCopy(project, options = {}) {
   if (!headline) {
     throw new Error('Headline is required for body copy repair.');
   }
+  const audienceContext = getProjectAudienceContext(project, options.audienceContextSource || null);
 
   const toneBits = [];
   if (angleBrief?.tone) toneBits.push(`TONE: ${angleBrief.tone}`);
@@ -2321,6 +2387,8 @@ export async function repairBodyCopy(project, options = {}) {
 BRAND: ${project?.brand_name || project?.name || 'Unknown brand'}
 HEADLINE: "${headline}"
 CURRENT BODY COPY: "${bodyCopy || ''}"
+PROJECT AUDIENCE CONTEXT:
+${audienceContext}
 ${toneBits.length > 0 ? `\nANGLE CONTEXT:\n${toneBits.join('\n')}` : ''}
 
 WHY THIS COPY FAILED:
@@ -2334,7 +2402,7 @@ REPAIR RULES:
 - Include at least one concrete detail.
 - The final sentence must be an explicit CTA using an action verb such as See, Read, Tap, Click, Learn, Find out, Watch, or Discover.
 - Do not repeat the headline verbatim.
-- Sound like a warm, credible direct-response ad for women 55-75.
+- Sound like a warm, credible direct-response ad for the documented audience.
 
 Return JSON only:
 {

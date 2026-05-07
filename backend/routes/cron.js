@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { runAllProjectsObservation } from '../services/observationTracker.js';
 import { runSchedulerOnce } from '../services/scheduler.js';
+import { runDirectorCycle } from '../services/conductorEngine.js';
 import { sweepStaleGenerations } from '../services/generationSweeper.js';
 import { getSetting } from '../convexClient.js';
 import { getCronSecret, isValidCronBearer } from '../security.js';
@@ -75,5 +76,18 @@ async function runGenerationSweeperCron(req, res) {
 
 router.get('/generation-sweeper', requireCronSecret, runGenerationSweeperCron);
 router.post('/generation-sweeper', requireCronSecret, runGenerationSweeperCron);
+
+async function runDirectorCron(req, res) {
+  try {
+    const result = await runDirectorCycle('planning');
+    res.json({ success: true, result: result || [] });
+  } catch (err) {
+    console.error('[cron director] failed:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+router.get('/director', requireCronSecret, runDirectorCron);
+router.post('/director', requireCronSecret, runDirectorCron);
 
 export default router;

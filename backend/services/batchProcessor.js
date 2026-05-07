@@ -732,7 +732,7 @@ async function generateBatchPrompts(batch, project, docs, onProgress, options = 
           project, adSpecs, imageData,
           batch.aspect_ratio || '1:1',
           angleBrief,
-          { documentaryMode: documentaryVisuals }
+          { documentaryMode: documentaryVisuals, audienceContextSource: docs }
         );
 
         // Apply prompt guidelines to each prompt individually
@@ -880,7 +880,7 @@ async function submitGeminiBatch(batchId, prompts, aspectRatio, projectName, pro
         responseModalities: ['TEXT', 'IMAGE'],
         imageConfig: {
           aspectRatio: aspectRatio || '1:1',
-          imageSize: '2K'
+          imageSize: '1K'
         }
       }
     };

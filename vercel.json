@@ -15,6 +15,7 @@
   ],
   "crons": [
     { "path": "/api/meta/oauth/refresh", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/director",      "schedule": "0 12 * * *" },
     { "path": "/api/cron/batches",       "schedule": "* * * * *" },
     { "path": "/api/cron/generation-sweeper", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/observation",   "schedule": "0 18 * * *" }
