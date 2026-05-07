@@ -1,5 +1,11 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Director angle hydration fix verified
+
+- Fixed Director angle hydration: `runDirectorForProject` now hydrates the full `conductor_angles` row before creating a batch, so `batch.angle`, `angle_prompt`, and `angle_brief` carry the selected angle's description and structured fields instead of only name/externalId.
+- Verified end-to-end with a production run on Christian Counsellor Webinar. The existing slot needed one 3-ad top-up and a temporary second Director slot produced one 6-ad batch; both completed, with 9/9 ad creatives saved and Stage 0/1 logs showing structured angle context instead of `undefined`.
+- Restored the Director config target after the test; total measured API cost for the run was $0.438791.
+
 ## 2026-05-07 — Director production test + Ad Studio prompt cleanup
 
 - Ran a production Director test on Christian Counsellor Webinar: Director created one 6-ad batch, Gemini Batch completed 6/6, and all six ad creatives were saved.
