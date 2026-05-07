@@ -1,5 +1,9 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Meta API setup instructions
+
+- Settings page: Meta API setup instructions updated to match the current Meta developer dashboard (5-step Create App wizard, business portfolio selection, App Domain + Facebook Login for Business OAuth Redirect URI configuration, Vercel env vars for token refresh).
+
 ## 2026-05-07 — Stage 1 headline specificity filter
 
 - Stage 1 candidate generation now includes a stricter angle-signal requirement, dynamic generic-rejection examples, and the angle's avoid list so candidates must reflect the selected angle's buyer, scene, symptom, objection, current belief, or frame.

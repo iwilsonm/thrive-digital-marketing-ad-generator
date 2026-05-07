@@ -946,13 +946,50 @@ export default function Settings() {
               <div className="mt-3 space-y-2 text-[12px] leading-relaxed text-ed-ink2">
                 <p>Create one Meta developer app for ThriveCampaigns, then reuse it for every project connection.</p>
                 <ol className="list-decimal pl-4 space-y-1">
-                  <li>Create or open a Meta app at <a className="underline" href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer">developers.facebook.com/apps</a>.</li>
-                  <li>Add Facebook Login for Business and the Marketing API product if Meta prompts for products.</li>
-                  <li>In the app's OAuth settings, add this exact redirect URI: <code className="bg-cream px-1 rounded">https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback</code>.</li>
-                  <li>Save the app's App ID and App Secret below.</li>
-                  <li>Inside each project, open Project Settings &rarr; Meta, connect your Meta account, then choose the ad account and Facebook Page.</li>
+                  <li>Sign in to Meta for Developers. Go to <a className="underline" href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer">developers.facebook.com/apps</a>. If this is your first time, register as a developer using your existing Facebook account and accept Meta's Platform Terms and Developer Policies.</li>
+                  <li>Click Create App. Meta walks you through a 5-step wizard: App details &rarr; Use cases &rarr; Business &rarr; Requirements &rarr; Overview.</li>
+                  <li>App details. Enter a descriptive app name like "ThriveCampaigns" or "ThriveCampaigns Ad Tool" and a contact email Meta can reach you at. Click Next.</li>
+                  <li>Use cases. Check only one box: Create &amp; manage ads with Marketing API. Do not check "Authenticate and request data from users with Facebook Login"; it is incompatible with Marketing API, and Meta will auto-attach Facebook Login for Business, the right OAuth flow for ad-account connections, when you pick Marketing API. Click Next.</li>
+                  <li>
+                    Business: connect a business portfolio. Three valid choices:
+                    <ul className="list-disc pl-4 mt-1 space-y-1">
+                      <li>Recommended: create a new portfolio for ThriveCampaigns. Click "Create a business portfolio" at the bottom and make one called "ThriveCampaigns".</li>
+                      <li>Pick an existing agency-level portfolio, such as your consulting or holding entity, not a brand-specific one. Avoid portfolios that represent specific e-commerce brands.</li>
+                      <li>Skip with "I don't want to connect a business portfolio yet" if you want to move fast. Standard Access does not require a portfolio. You can attach one later.</li>
+                    </ul>
+                  </li>
+                  <li>Requirements. For a Marketing API + Standard Access app, this typically shows "No requirements identified." Click Next.</li>
+                  <li>Overview &rarr; Create app. Meta shows a summary. Scroll down, agree to Meta's Platform Terms and Developer Policies, and click Create app. Meta creates the app and assigns a unique App ID and App Secret.</li>
+                  <li>Add the App Domain. In the main left sidebar, not any inner panel, click App settings &rarr; Basic. In the App domains field, add <code className="bg-cream px-1 rounded">thrive-digital-marketing-ad-generat.vercel.app</code>, then scroll to the bottom and click Save changes.</li>
+                  <li>
+                    Add the OAuth Redirect URI. In the main left sidebar, expand Facebook Login for Business, the top-level item, not under Use cases. Click Settings under it. Find the Valid OAuth Redirect URIs field and paste the exact URL: <code className="bg-cream px-1 rounded">https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback</code>. Press Enter to register it as a chip; most Meta pages auto-save this field.
+                    <div className="mt-1">
+                      Confirm these OAuth toggles on the same page:
+                      <ul className="list-disc pl-4 mt-1 space-y-1">
+                        <li>Client OAuth login: Yes</li>
+                        <li>Web OAuth login: Yes</li>
+                        <li>Enforce HTTPS: Yes</li>
+                        <li>Use Strict Mode for redirect URIs: Yes</li>
+                        <li>Login from devices: No</li>
+                        <li>Login with the JavaScript SDK: No</li>
+                      </ul>
+                    </div>
+                  </li>
+                  <li>Get your App ID and App Secret. Go back to App settings &rarr; Basic. Copy the App ID. Click Show next to App Secret, confirm your Facebook password, and copy the secret too.</li>
+                  <li>Save them in ThriveCampaigns. Open Settings &rarr; API Keys, this page, and paste both into the Meta App ID and Meta App Secret fields below. Save.</li>
+                  <li>
+                    Save them in Vercel as environment variables. In the Vercel project dashboard for <code className="bg-cream px-1 rounded">thrive-digital-marketing-ad-generat</code>, open Settings &rarr; Environment Variables &rarr; Production. Add two new variables:
+                    <ul className="list-disc pl-4 mt-1 space-y-1">
+                      <li><code className="bg-cream px-1 rounded">META_APP_ID</code> = your App ID</li>
+                      <li><code className="bg-cream px-1 rounded">META_APP_SECRET</code> = your App Secret</li>
+                    </ul>
+                    These power the daily Meta token-refresh cron, which reads from <code className="bg-cream px-1 rounded">process.env</code> directly. Without env vars, tokens expire at the 60-day mark and the integration silently breaks even though OAuth still works.
+                  </li>
+                  <li>Connect a project. In each project, open Project Settings &rarr; Meta &rarr; Connect Meta Account. Authorize the app, choose the ad account, choose the Facebook Page, and you are connected.</li>
                 </ol>
-                <p>The app requests Meta permissions for ads management, ads read access, business management, and Page listing so it can read analytics, prepare posts, select a Facebook Page, and support Direct API posting when you choose that path.</p>
+                <p>The app requests these Meta permissions: <code className="bg-cream px-1 rounded">ads_management</code>, <code className="bg-cream px-1 rounded">ads_read</code>, <code className="bg-cream px-1 rounded">business_management</code>, and <code className="bg-cream px-1 rounded">pages_show_list</code>. They cover reading analytics, preparing posts, selecting a Page, and supporting Direct API posting when you choose that path.</p>
+                <p>You start at Standard Access, labeled "Development" in the dashboard. That is enough to connect your own ad accounts immediately, with no review needed.</p>
+                <p>If you eventually want to manage other businesses' ad accounts at scale, you will need Advanced Access via Meta's Marketing API Access Tier review, renamed from "Ads Management Standard Access" effective May 4, 2026. Requirements: at least 500 Marketing API calls in the prior 15 days, error rate under 15% over your last 500 calls, and Business Verification of your business entity. Skip for now; Standard Access works for current scope.</p>
               </div>
             </details>
 
