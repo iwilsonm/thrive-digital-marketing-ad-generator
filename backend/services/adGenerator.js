@@ -1241,6 +1241,45 @@ function formatPriorHeadlineHistory(priorHeadlines) {
   return `\n\nRECENT HEADLINES ALREADY USED FOR THIS ANGLE:\n${lines}\nDo NOT recycle these headline families, hook moves, or central claims.`;
 }
 
+function formatAngleAvoidList(angleBrief) {
+  const raw = safeString(angleBrief?.avoid_list);
+  if (!raw) return '';
+  const items = raw
+    .split(/\n|;|,/)
+    .map((item) => item.replace(/^[-*]\s*/, '').trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  return items.length > 0 ? items.join('; ') : raw;
+}
+
+function buildAngleSpecificExampleBlock(angleBrief = null) {
+  const frame = safeString(angleBrief?.frame);
+  const scene = safeString(angleBrief?.scene);
+  const symptom = safeString(angleBrief?.symptom_pattern);
+  const objection = safeString(angleBrief?.objection);
+  const coreBuyer = safeString(angleBrief?.core_buyer);
+  const sceneExample = scene
+    ? scene.split(/[.!?]/)[0].trim()
+    : 'the exact lived moment from the angle';
+  const symptomExample = symptom
+    ? symptom.split(/[.!?]/)[0].trim()
+    : 'the specific symptom or decision tension';
+  const buyerExample = coreBuyer
+    ? coreBuyer.split(/[.!?]/)[0].trim()
+    : 'the exact buyer described in the angle';
+  const rejected = frame === 'objection-first'
+    ? ['Get Clarity Today', 'FINDING YOUR CALLING', 'Free Live Webinar']
+    : ['Free Live Webinar', 'Get Clarity Today', 'FINDING YOUR CALLING'];
+
+  const goodExamples = [
+    scene ? `"${sceneExample.length > 72 ? sceneExample.slice(0, 69) + '...' : sceneExample}"` : `"${buyerExample.length > 72 ? buyerExample.slice(0, 69) + '...' : buyerExample}"`,
+    symptom ? `"${symptomExample.length > 72 ? symptomExample.slice(0, 69) + '...' : symptomExample}"` : '"The exact doubt from this angle, stated plainly"',
+    objection ? `"${objection.split(/[.!?]/)[0].trim().slice(0, 72)}"` : '"A concrete moment that only this angle would create"',
+  ];
+
+  return `\n\nANGLE-SIGNAL EXAMPLES:\nGOOD candidates must sound this concrete and angle-specific:\n- ${goodExamples.join('\n- ')}\n\nREJECT generic offer/category candidates like:\n- "${rejected.join('"\n- "')}"\nThese rejected lines are too broad unless the visible headline itself also contains angle-specific scene, symptom, buyer, or objection language.`;
+}
+
 /**
  * Stage 0: Brief Extraction — condenses 4 foundational docs into angle-specific ~1 page brief.
  * Runs once per batch. 1 API call.
@@ -1410,6 +1449,8 @@ export async function generateHeadlines(project, briefPacket, angle, count, angl
     .map(({ lane, count: laneCount }) => `- ${lane}: generate exactly ${laneCount} headline${laneCount === 1 ? '' : 's'}\n  ${HEADLINE_LANES[lane]}`)
     .join('\n');
   const audienceContext = getProjectAudienceContext(project, briefPacket);
+  const angleAvoidList = formatAngleAvoidList(angleBrief);
+  const angleExampleBlock = buildAngleSpecificExampleBlock(angleBrief);
 
   const prompt = `You are a world-class direct response copywriter writing Facebook ad headlines for this specific project. Use the project materials below to understand who the audience is, what they want, and what would make them feel safe, understood, and intrigued before they engage.
 
@@ -1446,6 +1487,8 @@ ${laneInstructions}
 IMPORTANT DIVERSITY RULES:
 - Write exactly ${count} headlines total.
 - Every headline must belong to one of the allowed hook lanes above.
+- NON-NEGOTIABLE ANGLE SIGNAL: every visible headline must reflect at least one of the structured angle's core buyer language, scene fragment, symptom-pattern moment, objection, current belief, or frame-style hook. Generic offer/category statements like "Free Live Webinar", "Free Webinar", "Get Clarity Today", "FINDING YOUR CALLING", or category-only name headlines are forbidden unless the headline itself also contains angle-specific scene, symptom, buyer, or objection language.
+- ${angleAvoidList ? `Do not produce headlines that read like: ${angleAvoidList}.` : 'Do not produce generic promise headlines that could fit any webinar, course, product, or brand.'}
 - No two headlines may share the same hook lane AND the same core claim.
 - No two headlines may start with the same opening phrase.
 - Do not recycle the same persuasion move with slightly different wording.
@@ -1461,6 +1504,7 @@ IMPORTANT DIVERSITY RULES:
 KEEP A SECONDARY "SUB-ANGLE" LABEL:
 - For each headline, include a short sub_angle label that captures the micro-angle or speaker perspective for that exact line.
 - This is a secondary variation layer inside the hook lane. Keep it short and concrete.
+${angleExampleBlock}
 
 STRUCTURED METADATA REQUIREMENTS:
 - hook_lane: one of the allowed lanes above

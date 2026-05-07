@@ -14,6 +14,34 @@ const GENERIC_SCENE_STOPWORDS = new Set([
   'trip', 'twice', 'using', 'very',
 ]);
 
+const ANGLE_SIGNAL_STOPWORDS = new Set([
+  ...STOPWORDS,
+  'about', 'above', 'across', 'adult', 'adults', 'after', 'again', 'already',
+  'around', 'because', 'before', 'being', 'brand', 'buyer', 'called', 'calling',
+  'category', 'clarity', 'clear', 'come', 'comes', 'could', 'course', 'day',
+  'different', 'does', 'doing', 'each', 'else', 'enough', 'every', 'everyone',
+  'exactly', 'feel', 'feeling', 'feels', 'find', 'finding', 'first', 'free',
+  'get', 'gets', 'getting', 'give', 'going', 'good', 'great', 'growth', 'help',
+  'helps', 'here', 'into', 'just', 'keep', 'keeps', 'know', 'language', 'life',
+  'like', 'live', 'make', 'makes', 'many', 'maybe', 'more', 'most', 'must',
+  'need', 'needs', 'next', 'only', 'option', 'options', 'others', 'people',
+  'person', 'product', 'program', 'really', 'right', 'same', 'see', 'service',
+  'should', 'something', 'start', 'step', 'sure', 'thing', 'things', 'today',
+  'trust', 'trusted', 'try', 'trying', 'use', 'want', 'wants', 'webinar',
+  'without', 'work', 'working', 'world', 'would',
+]);
+
+const GENERIC_HEADLINE_PATTERNS = [
+  /\bfree\s+(?:live\s+)?webinar\b/i,
+  /\bget\s+clarity\s+(?:today|now)?\b/i,
+  /\bfinding\s+your\s+calling\b/i,
+  /\bfind\s+your\s+calling\b/i,
+  /\bdiscover\s+your\s+calling\b/i,
+  /\bstart\s+your\s+journey\b/i,
+  /\btake\s+the\s+next\s+step\b/i,
+  /\blearn\s+more\s+today\b/i,
+];
+
 function safeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -90,10 +118,18 @@ function toComparableHeadline(entry) {
     scores: entry?.scores && typeof entry.scores === 'object' ? entry.scores : undefined,
     average_score: numericScore(entry),
     rank: typeof entry?.rank === 'number' ? entry.rank : null,
+    angle_signal_score: Number.isFinite(entry?.angle_signal_score) ? entry.angle_signal_score : 0,
+    angle_signal_visible_score: Number.isFinite(entry?.angle_signal_visible_score) ? entry.angle_signal_visible_score : 0,
+    angle_signal_fields: Array.isArray(entry?.angle_signal_fields) ? entry.angle_signal_fields : undefined,
+    angle_signal_tokens: Array.isArray(entry?.angle_signal_tokens) ? entry.angle_signal_tokens : undefined,
   };
 }
 
 function compareCandidates(left, right) {
+  const signalDiff = (Number(right?.angle_signal_score) || 0) - (Number(left?.angle_signal_score) || 0);
+  if (Math.abs(signalDiff) > 0.0001) return signalDiff;
+  const visibleSignalDiff = (Number(right?.angle_signal_visible_score) || 0) - (Number(left?.angle_signal_visible_score) || 0);
+  if (Math.abs(visibleSignalDiff) > 0.0001) return visibleSignalDiff;
   const scoreDiff = numericScore(right) - numericScore(left);
   if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
   const leftRank = typeof left?.rank === 'number' ? left.rank : Number.MAX_SAFE_INTEGER;
@@ -113,6 +149,173 @@ function compactReasonCounts(rejected) {
     }
     return counts;
   }, {});
+}
+
+function distinctiveTokens(value, maxTokens = 18) {
+  const seen = new Set();
+  const tokens = tokenize(value)
+    .filter((token) => token.length >= 4)
+    .filter((token) => !ANGLE_SIGNAL_STOPWORDS.has(token))
+    .filter((token) => {
+      if (seen.has(token)) return false;
+      seen.add(token);
+      return true;
+    });
+  return tokens.slice(0, maxTokens);
+}
+
+function buildSignalFacet(name, sourceText, weight = 1) {
+  const tokens = distinctiveTokens(sourceText);
+  if (tokens.length === 0) return null;
+  return { name, tokens, weight };
+}
+
+function corpusForAngleSignal(candidate, { visibleOnly = false } = {}) {
+  const visibleParts = [
+    safeString(candidate?.headline || candidate?.headline_text),
+    safeString(candidate?.body_copy),
+    safeString(candidate?.primary_text),
+  ];
+  const metadataParts = [
+    safeString(candidate?.target_symptom),
+    safeString(candidate?.core_claim),
+    safeString(candidate?.scene_anchor),
+    safeString(candidate?.sub_angle),
+    safeString(candidate?.emotional_entry || candidate?.primary_emotion),
+    safeString(candidate?.desired_belief_shift),
+  ];
+  return normalizeHeadlineText((visibleOnly ? visibleParts : [...visibleParts, ...metadataParts]).filter(Boolean).join(' '));
+}
+
+function tokenSet(value) {
+  return new Set(tokenize(value));
+}
+
+function matchFacet(corpusTokens, facet) {
+  const matched = facet.tokens.filter((token) => corpusTokens.has(token));
+  if (matched.length === 0) return null;
+  return {
+    field: facet.name,
+    tokens: matched,
+    score: matched.length * facet.weight,
+  };
+}
+
+export function buildAngleSignalProfile(angleBrief) {
+  if (!angleBrief || typeof angleBrief !== 'object') return null;
+  const facets = [
+    buildSignalFacet('scene', angleBrief.scene, 3),
+    buildSignalFacet('symptom_pattern', angleBrief.symptom_pattern, 3),
+    buildSignalFacet('core_buyer', angleBrief.core_buyer, 2),
+    buildSignalFacet('current_belief', angleBrief.current_belief, 2),
+    buildSignalFacet('objection', angleBrief.objection, 2),
+    buildSignalFacet('failed_solutions', angleBrief.failed_solutions, 1),
+    buildSignalFacet('frame', String(angleBrief.frame || '').replace(/-/g, ' '), 1),
+  ].filter(Boolean);
+
+  if (facets.length === 0) return null;
+  return {
+    angleName: safeString(angleBrief.name),
+    frame: safeString(angleBrief.frame),
+    facets,
+    genericPatterns: GENERIC_HEADLINE_PATTERNS,
+  };
+}
+
+export function evaluateAngleSignal(candidate, angleBrief, profile = null) {
+  const signalProfile = profile || buildAngleSignalProfile(angleBrief);
+  if (!signalProfile) {
+    return {
+      aligned: true,
+      score: 0,
+      visibleScore: 0,
+      matchedFields: [],
+      matchedTokens: [],
+      reasons: [],
+      genericHeadline: false,
+    };
+  }
+
+  const comparable = toComparableHeadline(candidate);
+  const headline = comparable.headline;
+  const fullTokens = tokenSet(corpusForAngleSignal(candidate));
+  const visibleTokens = tokenSet(corpusForAngleSignal(candidate, { visibleOnly: true }));
+  const matches = signalProfile.facets
+    .map((facet) => matchFacet(fullTokens, facet))
+    .filter(Boolean);
+  const visibleMatches = signalProfile.facets
+    .map((facet) => matchFacet(visibleTokens, facet))
+    .filter(Boolean);
+  const score = matches.reduce((sum, match) => sum + match.score, 0);
+  const visibleScore = visibleMatches.reduce((sum, match) => sum + match.score, 0);
+  const genericHeadline = signalProfile.genericPatterns.some((pattern) => pattern.test(headline));
+  const reasons = [];
+
+  if (score <= 0) reasons.push('zero_angle_signal');
+  if (genericHeadline && visibleScore <= 1) reasons.push('generic_offer_or_category_headline');
+
+  return {
+    aligned: reasons.length === 0,
+    score,
+    visibleScore,
+    matchedFields: matches.map((match) => match.field),
+    matchedTokens: Array.from(new Set(matches.flatMap((match) => match.tokens))),
+    reasons,
+    genericHeadline,
+  };
+}
+
+export function filterAngleSignalHeadlines(candidates, angleBrief) {
+  const profile = buildAngleSignalProfile(angleBrief);
+  if (!profile) {
+    return {
+      active: false,
+      profile: null,
+      survivors: candidates.map(toComparableHeadline).filter((candidate) => candidate.headline),
+      rejected: [],
+      reasonCounts: {},
+    };
+  }
+
+  const survivors = [];
+  const rejected = [];
+  for (const candidate of candidates.map(toComparableHeadline).filter((entry) => entry.headline)) {
+    const result = evaluateAngleSignal(candidate, angleBrief, profile);
+    if (result.aligned) {
+      survivors.push({
+        ...candidate,
+        angle_signal_score: result.score,
+        angle_signal_visible_score: result.visibleScore,
+        angle_signal_fields: result.matchedFields,
+        angle_signal_tokens: result.matchedTokens,
+      });
+    } else {
+      rejected.push({
+        candidate,
+        reasons: result.reasons,
+        score: result.score,
+        visibleScore: result.visibleScore,
+        matchedFields: result.matchedFields,
+        matchedTokens: result.matchedTokens,
+      });
+    }
+  }
+
+  survivors.sort((left, right) => {
+    const signalDiff = (right.angle_signal_score || 0) - (left.angle_signal_score || 0);
+    if (Math.abs(signalDiff) > 0.0001) return signalDiff;
+    const visibleDiff = (right.angle_signal_visible_score || 0) - (left.angle_signal_visible_score || 0);
+    if (Math.abs(visibleDiff) > 0.0001) return visibleDiff;
+    return compareCandidates(left, right);
+  });
+
+  return {
+    active: true,
+    profile,
+    survivors,
+    rejected,
+    reasonCounts: compactReasonCounts(rejected),
+  };
 }
 
 function buildLexicalConcept(key, sourceText, minSharedTokens = 2) {
