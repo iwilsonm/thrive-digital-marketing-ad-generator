@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth } from '../auth.js';
-import { getProject, getLatestDoc, updateProject, getSystemDefaultAngle, createConductorAngle, invalidateQueryCache } from '../convexClient.js';
+import { getProject, getLatestDoc, updateProject, invalidateQueryCache } from '../convexClient.js';
 import { convexClient, api } from '../convexClient.js';
 import {
   regenerateDoc,
@@ -21,7 +21,6 @@ const DOC_TYPES = ['research', 'avatar', 'offer_brief', 'necessary_beliefs'];
 
 // Check if all 4 doc types exist and promote status to 'docs_ready' if so.
 // Only promotes from 'setup' — never demotes or interferes with 'generating_docs'.
-// Also ensures the BOF system angle exists when all docs are present.
 async function checkAndPromoteDocStatus(projectId) {
   try {
     const project = await getProject(projectId);
@@ -32,32 +31,6 @@ async function checkAndPromoteDocStatus(projectId) {
     // Promote status from setup to docs_ready
     if (project.status === 'setup' && allDocsExist) {
       await updateProject(projectId, { status: 'docs_ready' });
-    }
-
-    // Create BOF system angle if all docs exist and it doesn't already exist
-    if (allDocsExist) {
-      const existingBof = await getSystemDefaultAngle(projectId);
-      if (!existingBof) {
-        await createConductorAngle({
-          id: uuidv4(),
-          project_id: projectId,
-          name: 'BOF (Bottom of Funnel)',
-          description: 'Core Buyer: Warm prospects who already know the product — visited the site, seen ads, comparing options, almost ready to buy.\nSymptom Pattern: Hesitation at the point of purchase — needs one more push.\nObjection: Price concerns, skepticism about results.\nScene: Scrolling feed, pauses on a clean product-focused ad with a star rating and a limited-time offer.\nDesired Belief Shift: This product is proven, trustworthy, easy to buy, and worth buying now.',
-          core_buyer: 'Warm prospects who already know the product — visited the site, seen ads, comparing options, almost ready to buy',
-          symptom_pattern: 'Hesitation at the point of purchase — needs one more push: a better deal, stronger proof, or final reassurance',
-          objection: 'Price concerns, skepticism about results, uncertainty about whether this is the right product for them',
-          scene: 'Scrolling Facebook or Instagram feed, pauses on a clean product-focused ad with a star rating and a limited-time offer',
-          desired_belief_shift: 'This product is proven, trustworthy, easy to buy, and worth buying now',
-          tone: 'Direct, confident, conversion-focused — like a high-performing static Facebook ad',
-          avoid_list: 'Awareness-stage messaging, abstract artistic imagery, lifestyle mood images, overcrowded layouts, generic posters, long educational content',
-          prompt_hints: 'IMAGE DIRECTION — Conversion-focused ecommerce ad to close the sale: 1) PRODUCT VISUAL: Show the actual product clearly and prominently as the main focus. Clean, polished product shot. 2) HEADLINE: Short, direct headline that removes hesitation or gives a reason to buy now. 3) PROOF ELEMENT: Include star rating, customer count, review snippet, or before/after result. 4) TRUST/OFFER: Include guarantee, free shipping, limited-time discount, or doctor recommended. 5) CTA: "Shop Now", "Get Yours Today", or "Try It Risk-Free". DESIGN: Clean layout, product dominant, text short and bold, scannable in 1-2 seconds. Should feel like a mini sales page compressed into one static ad.',
-          source: 'system',
-          status: 'active',
-          priority: 'medium',
-          is_system_default: true,
-        });
-        console.log(`[Docs] Created BOF angle for project ${projectId}`);
-      }
     }
   } catch (err) {
     console.error('[Docs] Status check error:', err.message);

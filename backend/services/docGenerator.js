@@ -267,7 +267,7 @@ Be argument creators, not copy creators. Not copywriters — craft arguments fir
 }
 
 function prompt8_NecessaryBeliefs(researchContent, avatarContent, offerBriefContent) {
-  return `Great work! Now that you understand that marketing at its core is simply about changing the existing beliefs of a customer into the beliefs that align with them empowering them to purchase our product, I want you to please analyze the following documents about my prospect and write out the few absolutely necessary beliefs that a prospect must have before purchasing my product. It should be no more than 6 beliefs. I also want you to structure these as "I believe that…" statements. Go ahead.
+  return `Great work! Now that you understand that marketing at its core is simply about changing the existing beliefs of a customer into the beliefs that align with them taking the next conversion action for this offer, I want you to please analyze the following documents about my prospect and write out the few absolutely necessary beliefs that a prospect must have before taking that next conversion action. It should be no more than 6 beliefs. I also want you to structure these as "I believe that…" statements. Go ahead.
 
 RESEARCH DOCUMENT:
 ${researchContent}
@@ -328,7 +328,7 @@ export async function regenerateDoc(projectId, docType, onEvent) {
           const researchDoc = await getLatestDoc(projectId, 'research');
           if (!researchDoc) throw new Error('No research document found. Please generate research first.');
           messages = [
-            { role: 'user', content: `You are my expert copywriter specializing in direct response copy for my ecommerce brand that sells ${project.product_description}. Here is the research document:\n\n${researchDoc.content}` },
+            { role: 'user', content: `You are my expert copywriter specializing in direct response copy for my brand. The offer being advertised is described as: ${project.product_description}. Here is the research document:\n\n${researchDoc.content}` },
             { role: 'assistant', content: 'I\'ve thoroughly reviewed the research document. Ready to proceed.' },
             { role: 'user', content: prompt5_AvatarSheet() }
           ];
@@ -340,7 +340,7 @@ export async function regenerateDoc(projectId, docType, onEvent) {
           const avatarDoc = await getLatestDoc(projectId, 'avatar');
           if (!researchDoc) throw new Error('No research document found. Please generate research first.');
           messages = [
-            { role: 'user', content: `You are my expert copywriter specializing in direct response copy for my ecommerce brand that sells ${project.product_description}. Here is the research document:\n\n${researchDoc.content}` },
+            { role: 'user', content: `You are my expert copywriter specializing in direct response copy for my brand. The offer being advertised is described as: ${project.product_description}. Here is the research document:\n\n${researchDoc.content}` },
             { role: 'assistant', content: 'I\'ve thoroughly reviewed the research. Ready to proceed.' },
             { role: 'user', content: prompt5_AvatarSheet() },
             { role: 'assistant', content: avatarDoc?.content || 'Avatar sheet not yet created.' },
@@ -462,7 +462,7 @@ export async function generateFromManualResearch(projectId, researchContent, onE
   // and keep only the role setup + research document
   chatMessages.length = 0;
   chatMessages.push(
-    { role: 'user', content: `You are my expert copywriter specializing in direct response copy for my ecommerce brand that sells ${project.product_description}. I've completed deep market research. Here is the research document:\n\n${researchContent}` },
+    { role: 'user', content: `You are my expert copywriter specializing in direct response copy for my brand. The offer being advertised is described as: ${project.product_description}. I've completed deep market research. Here is the research document:\n\n${researchContent}` },
     { role: 'assistant', content: 'I\'ve thoroughly reviewed the research document. I can see the consumer insights, verbatim quotes, pain points, and market dynamics. I\'m ready to use this to create the foundational documents. Let\'s proceed.' }
   );
 

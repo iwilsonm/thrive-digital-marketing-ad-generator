@@ -52,13 +52,16 @@ vi.mock('sharp', () => ({
   })),
 }));
 
-import { chatWithImage } from '../services/openai.js';
+import { chat, chatWithImage } from '../services/openai.js';
 import { getAllTemplateImages } from '../convexClient.js';
 import {
+  HEADLINE_LANES,
   repairJSON,
   buildCreativeDirectorPrompt,
   buildImageRequestText,
+  generateImagePrompt,
   generateImagePromptsBatch,
+  getOfferRenderContext,
   assertTemplateTagHasActiveTemplates,
 } from '../services/adGenerator.js';
 
@@ -293,5 +296,66 @@ describe('generateImagePromptsBatch', () => {
     expect(imagePromptRequest).toContain('TEMPLATE TEXT CONTRACT');
     expect(imagePromptRequest).toContain('META PRIMARY TEXT CONTEXT (do not render verbatim');
     expect(imagePromptRequest).not.toContain('Each prompt should render the EXACT headline and body copy text');
+  });
+});
+
+describe('offer-agnostic image prompt defaults', () => {
+  it('does not include ecommerce rendering defaults for a non-ecom webinar offer', async () => {
+    chat.mockClear();
+    chat.mockResolvedValueOnce('Create a webinar-specific scene.');
+
+    await generateImagePrompt(
+      {
+        id: 'project-webinar',
+        name: 'Christian Counsellor Webinar',
+        brand_name: 'TOV',
+        niche: '',
+        product_description: 'A free live webinar helping Christians compare counselling paths before training.',
+      },
+      'One tab shows tuition; the next shows your church calendar.',
+      'Compare licensure, ministry, and certificate paths before you commit.',
+      'careful anxiety',
+      null,
+      '1:1',
+      {
+        frame: 'consequence-first',
+        core_buyer: 'Christians discerning whether counselling training fits their calling and life.',
+        scene: 'A kitchen table with a laptop, bills, and a church calendar.',
+        emotional_state: 'Careful anxiety and financial caution.',
+        tone: 'Practical, calm, responsible.',
+      }
+    );
+
+    const prompt = chat.mock.calls.at(-1)[0][0].content;
+
+    expect(prompt).toContain('Offer rendering mode: offer-agnostic / non-physical by default.');
+    expect(prompt).toContain('CORE BUYER: Christians discerning whether counselling training fits their calling and life. — the person in the image should feel like this prospect');
+    expect(prompt).not.toMatch(/product mockup/i);
+    expect(prompt).not.toMatch(/trust badge/i);
+    expect(prompt).not.toMatch(/star rating/i);
+    expect(prompt).not.toMatch(/\bDTC\b/i);
+    expect(prompt).not.toMatch(/this woman/i);
+  });
+
+  it('allows ecommerce-specific render context only when the project explicitly says ecommerce', () => {
+    const context = getOfferRenderContext({
+      name: 'Joint Relief',
+      brand_name: 'Joint Relief',
+      niche: 'supplements ecommerce',
+      product_description: 'A joint support supplement sold online.',
+    });
+
+    expect(context).toContain('ecommerce / physical-product eligible');
+    expect(context).toContain('packaging');
+  });
+});
+
+describe('headline lane defaults', () => {
+  it('does not define review_like as fabricated testimonial or product-review framing', () => {
+    expect(HEADLINE_LANES.review_like).not.toMatch(/testimonial/i);
+    expect(HEADLINE_LANES.review_like).not.toMatch(/product review/i);
+    expect(HEADLINE_LANES.review_like).toMatch(/first-person reflection/i);
+    expect(HEADLINE_LANES.failed_solutions).not.toMatch(/purchases/i);
+    expect(HEADLINE_LANES.symptom_recognition).not.toMatch(/physical symptom/i);
   });
 });

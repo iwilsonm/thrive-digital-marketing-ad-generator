@@ -356,16 +356,17 @@ export function buildCreativeDirectorPrompt(project, docs) {
   const avatarContent = docs.avatar?.content || '[No avatar sheet available]';
   const offerContent = docs.offer_brief?.content || '[No offer brief available]';
   const beliefsContent = docs.necessary_beliefs?.content || '[No necessary beliefs document available]';
+  const offerRenderContext = getOfferRenderContext(project, docs);
 
-  let prompt = `You are a world-class creative director and image generation expert working exclusively for ${project.brand_name}, a ${project.niche} brand that ${project.product_description}.
+  let prompt = `You are a world-class creative director and image generation expert working exclusively for ${project.brand_name}, a brand advertising this offer: ${project.product_description}.
 
 🎯 Your Role:
 Your sole job is to analyze creative inputs and generate prompts for text-to-image softwares for the brand, including:
 Static ads
 Comparison ads
-Product-in-hand visuals
-Before/after transformations
-Lifestyle or user-experience visuals
+Offer explainer visuals
+Before/after belief or situation transformations
+Lifestyle, documentary, or user-experience visuals
 And more
 
 📄 Workflow:
@@ -377,11 +378,15 @@ Recreate the image concepts—but styled, branded, and tailored for my brand men
 Ensure the design, layout, and mood matches my brands audience and brand aesthetic.
 Ask for clarification only if absolutely necessary—default to action.
 
+OFFER RENDERING CONTEXT:
+${offerRenderContext}
+
 ✅ Creative Requirements:
 All image generations must use 1:1 aspect ratio unless otherwise specified.
-Include product mockups, realistic models, and visual results.
-Avoid generic stock photo vibes—aim for realism, emotion, and DTC ad performance.
-Prioritize scroll-stopping contrast and clean, conversion-focused design.
+Use truthful visual anchors for the offer being advertised. For non-physical offers, show the prospect's lived moment, decision context, emotional state, or outcome rather than inventing a physical item.
+Avoid generic stock photo vibes—aim for realism, emotional specificity, and offer-relevant ad performance.
+Prioritize scroll-stopping contrast and clean, legible design.
+Do not invent proof elements, reviewer names, review-score graphics, customer-volume claims, named testimonial signatures, or specific statistics unless they are present in the project documentation.
 
 📣 Tone & Audience:
 Please match the tone of the ads according to the research doc attached to this message.
@@ -1138,7 +1143,7 @@ export function getProjectAudienceContext(project = {}, foundationalDocs = null)
 
   const lines = [
     `Brand: ${brand}${niche ? ` (${niche})` : ''}.`,
-    product ? `Offer/product: ${product}` : null,
+    product ? `Offer: ${product}` : null,
     avatarSnippet
       ? `Audience from project docs: ${avatarSnippet}`
       : 'Audience from project docs: use only the audience, beliefs, pain points, and context provided in the project materials.',
@@ -1148,14 +1153,52 @@ export function getProjectAudienceContext(project = {}, foundationalDocs = null)
   return lines.join('\n');
 }
 
+function isExplicitEcommerceProject(project = {}) {
+  const haystack = [
+    project?.niche,
+    project?.category,
+    project?.business_type,
+    project?.product_type,
+    project?.product_description,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return /\b(ecommerce|e-commerce|dtc|direct-to-consumer|shopify|woocommerce|supplement|supplements|physical product|skincare|cosmetic|apparel|retail|consumer product|cpg)\b/.test(haystack);
+}
+
+export function getOfferRenderContext(project = {}, foundationalDocs = null) {
+  const offer = compactPromptText(project?.product_description || '', 700);
+  const audience = getProjectAudienceContext(project, foundationalDocs);
+  const ecommerce = isExplicitEcommerceProject(project);
+
+  if (ecommerce) {
+    return [
+      'Offer rendering mode: ecommerce / physical-product eligible because the project niche or offer explicitly indicates ecommerce, DTC, supplements, retail, or a physical consumer product.',
+      offer ? `Offer being advertised: ${offer}` : null,
+      'Visuals may show the actual item, packaging, shopping context, or a concrete product demonstration when it is truthful to the project materials.',
+      'Still do not invent proof elements, reviewer names, review-score graphics, customer-volume claims, or specific statistics unless they are present in the project documentation.',
+      audience,
+    ].filter(Boolean).join('\n');
+  }
+
+  return [
+    'Offer rendering mode: offer-agnostic / non-physical by default.',
+    offer ? `Offer being advertised: ${offer}` : null,
+    'Do not assume there is a physical item to photograph, hold, unbox, compare on a shelf, or place as the dominant visual.',
+    'Build the visual around the prospect, the lived moment, the emotional tension, the setting, the promised clarity, or the next-step action described in the project materials.',
+    'If a template has product-shaped space, adapt it into an offer-relevant visual anchor such as a webinar screen, calendar moment, notes, decision map, or real-world scene only when that fits the project context.',
+    'Do not invent proof elements, reviewer names, review-score graphics, customer-volume claims, named testimonial signatures, or specific statistics unless they are present in the project documentation.',
+    audience,
+  ].join('\n');
+}
+
 export const HEADLINE_LANES = {
-  symptom_recognition: 'Open with a specific physical symptom the reader recognizes instantly.',
+  symptom_recognition: "Open with a specific moment, sensation, or recognition from the prospect's lived experience.",
   oddly_specific_moment: 'Describe a hyper-specific moment, time, or sensation that feels uncannily real.',
-  failed_solutions: 'Lead with the remedies, purchases, or routines they already tried without success.',
+  failed_solutions: "Lead with the things the prospect has already tried (advice they got, solutions they considered, paths they almost took) that didn't resolve the underlying tension.",
   consequence_led: 'Focus on the cost of leaving the problem unresolved.',
   skeptical_confession: 'Use the voice of someone who doubted it would work and admits that honestly.',
   objection_reversal: 'Name the objection directly, then flip it in a grounded way.',
-  review_like: 'Sound like a real recommendation, testimonial, or product review from a trusted person.',
+  review_like: "Sound like a real first-person reflection or insight, in the voice of someone who's been through this experience. Do NOT fabricate named endorsements, review-score graphics, or invented reviewer credentials.",
   comparison: 'Compare against a familiar alternative, habit, or failed solution.',
   mechanism_curiosity: 'Create curiosity around how or why something works without fully explaining it.',
   identity_trust: 'Appeal to identity, values, trust, origin, or buyer-protection logic.',
@@ -1330,7 +1373,7 @@ export async function extractBrief(project, docs, angle, angleBrief = null) {
   const prompt = `You are a direct response research analyst. Your job is to extract the most relevant raw material from brand foundational documents for a specific advertising angle.
 
 BRAND: ${project.brand_name || project.name}
-PRODUCT: ${project.product_description || ''}
+OFFER: ${project.product_description || ''}
 TARGET DEMOGRAPHIC: ${targetDemographic}
 
 ${angleContext}
@@ -1340,7 +1383,7 @@ I will provide you with four foundational documents. From these documents, extra
 Your output must contain exactly these sections:
 
 ## AVATAR IN THIS MOMENT
-3-4 sentences describing who this woman is specifically when she encounters an ad using this angle. What is she feeling right now? What would make her stop scrolling?
+3-4 sentences describing who this person is specifically when they encounter an ad using this angle. What are they feeling right now? What would make them stop scrolling?
 
 ## RELEVANT PAIN POINTS (max 5)
 Only the pain points from the research/avatar docs that this angle activates. Not all pain points — just the ones this angle touches.
@@ -1462,7 +1505,7 @@ ${audienceContext}
 Your job is NOT to produce loosely varied headlines. Your job is to produce a diverse headline set where each hook feels meaningfully different in persuasion style, emotional entry point, and central claim.
 
 BRAND: ${project.brand_name || project.name}
-PRODUCT: ${project.product_description || ''}
+OFFER: ${project.product_description || ''}
 
 TARGET AUDIENCE IN THIS MOMENT:
 ${avatarSection || '(Not available)'}
@@ -1495,12 +1538,12 @@ IMPORTANT DIVERSITY RULES:
 - No two headlines may start with the same opening phrase.
 - Do not recycle the same persuasion move with slightly different wording.
 - ${sceneLocked
-    ? `Every headline must stay unmistakably about this exact scene: ${angleBrief.scene}. Do not widen into adjacent sleep problems or generic consequences unless the bathroom-trip / back-in-bed / cannot-fall-asleep moment is still explicit.`
+    ? `Every headline must stay unmistakably about this exact scene: ${angleBrief.scene}. Variation is allowed in framing, but the lived moment must remain explicit.`
     : `The angle "${angle || 'general'}" is a strategic lens, not the headline text itself.`}
 - Headlines must be short. Maximum 12 words. Under 8 words is ideal when it still feels natural.
 - Avoid hype cliches, fake authority, miracle language, and anything that sounds like generic ad copy.
 - ${sceneLocked
-    ? 'For consequence-led headlines, the consequence must still be tied directly to the same middle-of-the-night wake-to-pee / back-in-bed moment.'
+    ? 'For consequence-led headlines, the consequence must still be tied directly to the same scene and prospect tension.'
     : 'Consequences can widen the frame as long as the line still feels specific and grounded.'}
 
 KEEP A SECONDARY "SUB-ANGLE" LABEL:
@@ -1770,7 +1813,7 @@ PROJECT AUDIENCE CONTEXT:
 ${audienceContext}
 
 BRAND: ${project.brand_name || project.name}
-PRODUCT: ${project.product_description || ''}
+OFFER: ${project.product_description || ''}
 
 TONE RULES:
 - Never use hype language or miracle framing
@@ -1788,7 +1831,7 @@ ${beliefs || '(Not available)'}
 
 ---
 
-For each headline below, write one compact creative context block that explains the buyer moment, emotional pivot, and product bridge the image prompt should understand.
+For each headline below, write one compact creative context block that explains the buyer moment, emotional pivot, and offer bridge the image prompt should understand.
 
 RULES FOR EVERY CREATIVE CONTEXT:
 
@@ -1801,9 +1844,11 @@ RULES FOR EVERY CREATIVE CONTEXT:
 
 4. DO NOT REPEAT THE HEADLINE TEXT in the context.
 
-5. DO NOT FORCE A CTA. Include a product bridge only if it helps the visual concept. The template text contract will decide how much copy appears on the image.
+5. DO NOT FORCE A CTA. Include an offer bridge only if it helps the visual concept. The template text contract will decide how much copy appears on the image.
 
 6. NONE of these phrases: "game-changer", "revolutionize", "transform your life", "the ultimate solution", "miracle", "breakthrough discovery", "you won't believe what happened next"
+
+7. DO NOT fabricate testimonials, reviewer names, review-score graphics, customer-volume claims, or specific statistics. Only use proof that appears in the project materials.
 
 ---
 
@@ -1813,8 +1858,8 @@ ${headlineList}
 
 For each headline, write ONE creative context block. Vary the structural approach across the five:
 - At least 1 should use STORY CONTINUATION (extend the narrative voice of the headline)
-- At least 1 should use PROBLEM-AGITATE (hit the pain with specific detail, then pivot to product)
-- At least 1 should use SOCIAL PROOF (open with what another woman experienced — a name, an age, a specific result)
+- At least 1 should use PROBLEM-AGITATE (hit the pain with specific detail, then pivot to the offer)
+- At least 1 should use PEER REFLECTION (sound like a grounded first-person realization without inventing a named testimonial, age, credential, or specific result)
 - The remaining can use whichever approach fits the headline best
 
 OUTPUT FORMAT — respond as JSON only:
@@ -1824,9 +1869,9 @@ OUTPUT FORMAT — respond as JSON only:
     {
       "headline": "...",
       "body_copy": "compact creative context for image generation, not final Meta primary text",
-      "structure": "story_continuation | problem_agitate | social_proof",
+      "structure": "story_continuation | problem_agitate | peer_reflection",
       "word_count": 42,
-      "specific_detail_used": "2-4am wakeups",
+      "specific_detail_used": "specific lived detail from the project materials",
       "closing_cta": null
     }
   ]
@@ -1996,13 +2041,14 @@ export async function generateImagePrompt(project, headline, bodyCopy, primaryEm
   const documentaryMode = !!options.documentaryMode;
   const repairNotes = Array.isArray(options.repairNotes) ? options.repairNotes.filter(Boolean) : [];
   const audienceContext = getProjectAudienceContext(project, options.audienceContextSource || null);
+  const offerRenderContext = getOfferRenderContext(project, options.audienceContextSource || null);
   // Build visual direction from structured angle brief
   let visualDirectionBlock = '';
   if (angleBrief && (angleBrief.scene || angleBrief.frame || angleBrief.tone)) {
     const parts = [];
     if (angleBrief.scene) parts.push(`SCENE/SETTING: ${angleBrief.scene} — the visual should evoke this moment`);
     if (angleBrief.frame) parts.push(`AD FRAME: ${angleBrief.frame} — inform the visual treatment accordingly`);
-    if (angleBrief.core_buyer) parts.push(`CORE BUYER: ${angleBrief.core_buyer} — the person in the image should feel like this woman`);
+    if (angleBrief.core_buyer) parts.push(`CORE BUYER: ${angleBrief.core_buyer} — the person in the image should feel like this prospect`);
     if (angleBrief.emotional_state) parts.push(`EMOTIONAL STATE TO CONVEY: ${angleBrief.emotional_state}`);
     if (angleBrief.tone) parts.push(`TONE: ${angleBrief.tone}`);
     if (angleBrief.avoid_list) parts.push(`VISUAL ELEMENTS TO AVOID: ${angleBrief.avoid_list}`);
@@ -2029,8 +2075,11 @@ export async function generateImagePrompt(project, headline, bodyCopy, primaryEm
 PROJECT AUDIENCE CONTEXT:
 ${audienceContext}
 
+OFFER RENDERING CONTEXT:
+${offerRenderContext}
+
 BRAND: ${project.brand_name || project.name}
-PRODUCT CONTEXT: ${project.product_description || ''}
+OFFER CONTEXT: ${project.product_description || ''}
 
 ASPECT RATIO: ${aspectRatio || '1:1'}
 
@@ -2058,11 +2107,12 @@ Generate an image prompt that:
 
 CRITICAL NEGATIVES:
 - NO text overlays
-- NO logos, badges, bullets, testimonial cards, review stars, comparison layouts, before/after panels, mockups, coupons, or ad-template framing
-- NO product visible unless the angle brief explicitly demands it
-- NO flat-lay product photography
+- NO logos, badges, bullets, testimonial cards, review-score graphics, comparison layouts, before/after panels, mockups, coupons, or ad-template framing
+- NO physical item visible unless the project documentation explicitly describes a physical item
+- NO flat-lay item photography
 - NO branded footer or brand mark
 - NO split-screen or infographic composition
+- NO fabricated proof elements, reviewer names, customer-volume claims, named testimonial signatures, or invented statistics
 
 Treat the approved copy as semantic direction only. The output should be a photorealistic visual scene, not a designed ad layout.`
     : `You are a creative director generating prompts for text-to-image AI software. You create Facebook ad visuals tailored to this project's specific offer, audience, and brand context.
@@ -2070,8 +2120,11 @@ Treat the approved copy as semantic direction only. The output should be a photo
 PROJECT AUDIENCE CONTEXT:
 ${audienceContext}
 
+OFFER RENDERING CONTEXT:
+${offerRenderContext}
+
 BRAND: ${project.brand_name || project.name}
-PRODUCT APPEARANCE: ${project.product_description || ''}
+OFFER CONTEXT: ${project.product_description || ''}
 
 ASPECT RATIO: ${aspectRatio || '1:1'}
 
@@ -2089,24 +2142,24 @@ TEMPLATE TO MATCH:
 ---
 
 Analyze the template's visual structure:
-- Layout (where text sits, where product sits, visual hierarchy)
+- Layout (where text sits, where the main visual anchor sits, visual hierarchy)
 - Color palette and mood
 - Typography style (serif vs sans-serif, weight, contrast)
-- Use of badges, callouts, trust elements, or decorative frames
+- Use of callouts, decorative frames, or secondary text zones
 - Overall composition and whitespace
 
 Generate an image prompt that:
 
 1. Recreates the template's layout and composition style — adapted for ${project.brand_name || project.name}
-2. Features the product (${project.product_description || ''}) as the primary product visual, positioned where the template places its product. The product image will be composited in separately — so describe where it should go and at what scale, but focus the image prompt on the background, layout, and design elements.
+2. Adapts any product-shaped or hero-visual area into an offer-relevant visual anchor. For non-physical offers, use the prospect's lived scene, decision context, webinar setting, notes, calendar, screen, or other truthful context from the project materials instead of inventing a physical item.
 3. Places the EXACT headline text in the primary/dominant text position matching the template's hierarchy
 4. Places a key supporting line from the body copy (or the closing CTA) in the secondary text position if the template has one
 5. Places the brand name (${project.brand_name || project.name}) in a subtle position (footer, corner) matching the template
 6. Supports the emotional tone of the headline — the visual mood (colors, lighting, texture, casting, composition) should reinforce what the headline makes the reader feel and what belief shift it is trying to create. Skepticism angles get editorial/news-style treatments. Pain point angles get warm, empathetic tones. Relief angles get bright, calm aesthetics.
 7. Uses the specified aspect ratio: ${aspectRatio || '1:1'}
 8. Avoids generic stock photo aesthetics — aim for authentic, warm, realistic direct-response ad quality that resonates with the documented audience
-9. Prioritizes scroll-stopping contrast and clean, conversion-focused design
-10. Includes realistic product representation — not cartoonish or overly polished
+9. Prioritizes scroll-stopping contrast, clean hierarchy, and offer-relevant design
+10. Does not instruct the renderer to include fabricated proof elements, reviewer names, review-score graphics, customer-volume claims, named testimonial signatures, or invented statistics. If the project documentation contains real testimonials or proof, those can be referenced; otherwise omit proof elements.
 
 CRITICAL: The headline and body copy are FINAL. Do not rewrite, shorten, improve, or paraphrase them. Your job is visual execution only. Render the text exactly as provided.
 
@@ -2211,7 +2264,7 @@ Rules:
 - Estimate text zones from the image layout. If the template has no visible ad text, return text_density "none" and zones [].
 - If it has a long paragraph/testimonial block, mark that zone as long/heavy. Long copy is allowed only when the template visibly supports it.
 - Aspect ratio for the generated ad: ${aspectRatio || '1:1'}.
-- Brand/product context: ${project?.brand_name || project?.name || 'Unknown brand'} / ${project?.product_description || 'unknown product'}.`;
+- Brand/offer context: ${project?.brand_name || project?.name || 'Unknown brand'} / ${project?.product_description || 'unknown offer'}.`;
 
   try {
     const imageBase64 = readImageBase64(imageData);
@@ -2268,6 +2321,7 @@ function normalizePromptPackage(item, index, templateTextContract) {
 export async function generateImagePromptsBatch(project, ads, imageData, aspectRatio, angleBrief = null, options = {}) {
   const documentaryMode = !!options.documentaryMode;
   const audienceContext = getProjectAudienceContext(project, options.audienceContextSource || null);
+  const offerRenderContext = getOfferRenderContext(project, options.audienceContextSource || null);
   const templateTextContract = options.templateTextContract
     ? normalizeTemplateTextContract(options.templateTextContract, { documentaryMode })
     : await analyzeTemplateTextContract(project, imageData, aspectRatio, { documentaryMode });
@@ -2309,7 +2363,7 @@ PRIMARY EMOTION: ${ad.primary_emotion || 'curiosity'}${strategyBlock}`;
   const modeInstruction = documentaryMode
     ? `You are a creative director generating documentary-style image prompts for Meta ads tailored to this project's audience.
 Generate pure documentary/lifestyle scenes that visually express each ad's copy without rendering any words.
-CRITICAL NEGATIVES: NO text overlays, NO logos, NO product unless the angle brief demands it, NO ad-template framing.`
+CRITICAL NEGATIVES: NO text overlays, NO logos, NO physical item unless the project documentation demands it, NO ad-template framing.`
     : `You are a creative director generating prompts for text-to-image AI software. You create Facebook ad visuals tailored to this project's specific offer, audience, and brand context.
 ${imageData ? 'Analyze the attached template image for layout, color palette, typography, and composition. Each prompt should recreate this style.' : ''}
 Each prompt must follow the TEMPLATE TEXT CONTRACT below. Generate the on-image copy needed for the template's visible text zones. Do not render the full Meta primary-text paragraph inside the image unless the template contract explicitly contains a long body/testimonial zone.`;
@@ -2319,13 +2373,19 @@ Each prompt must follow the TEMPLATE TEXT CONTRACT below. Generate the on-image 
 PROJECT AUDIENCE CONTEXT:
 ${audienceContext}
 
+OFFER RENDERING CONTEXT:
+${offerRenderContext}
+
 BRAND: ${project.brand_name || project.name}
-PRODUCT: ${project.product_description || ''}
+OFFER: ${project.product_description || ''}
 ASPECT RATIO: ${aspectRatio || '1:1'}
 ${visualDirectionBlock}
 
 TEMPLATE TEXT CONTRACT:
 ${JSON.stringify(templateTextContract, null, 2)}
+
+FABRICATED-PROOF RULE:
+Do not instruct the renderer to include fabricated proof elements, reviewer names, review-score graphics, customer-volume claims, named testimonial signatures, or invented statistics. If the project documentation contains real testimonials or proof, those can be referenced; otherwise omit proof elements.
 
 I need you to generate ${ads.length} SEPARATE image prompts — one for each ad below. Each prompt must be tailored to its specific headline, body copy, and emotion.
 
