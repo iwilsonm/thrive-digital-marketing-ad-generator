@@ -1,5 +1,10 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-07 — Director production test + Ad Studio prompt cleanup
+
+- Ran a production Director test on Christian Counsellor Webinar: Director created one 6-ad batch, Gemini Batch completed 6/6, and all six ad creatives were saved.
+- Removed residual health/wellness and women 55-75 hardcoding from Ad Studio angle/headline prompt builders in `backend/routes/ads.js`; prompts now derive audience context from project docs like the batch path.
+
 ## 2026-05-07 — Director enablement and batch prompt hardening
 
 - Seeded an active Creative Director config for the Christian Counsellor Webinar project and added a daily CRON_SECRET-gated `/api/cron/director` route at 12:00 UTC.

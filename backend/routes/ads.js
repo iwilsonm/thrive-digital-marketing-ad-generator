@@ -9,6 +9,7 @@ const STUCK_ADS_THRESHOLD_MIN = 5;
 import { generateAd, generateAdMode2, regenerateImageOnly, applyPromptEdit, assertTemplateTagHasActiveTemplates, normalizeTemplateTag } from '../services/adGenerator.js';
 import { generateBodyCopy } from '../services/bodyCopyGenerator.js';
 import { chat } from '../services/openai.js';
+import { buildAngleGenerationPrompt, buildHeadlineGenerationPrompt } from '../services/adStudioPrompts.js';
 
 // Same model the batch pipeline uses for copy generation (see commit 76c8109).
 const SINGLE_AD_TEXT_MODEL = 'gpt-5.2';
@@ -302,19 +303,7 @@ router.post('/:projectId/generate-angle', async (req, res) => {
 
     const result = await chat([{
       role: 'user',
-      content: `You are a direct response ad strategist. Based on the brand and audience docs below, suggest ONE specific, unexpected ad angle/topic.
-
-BRAND: ${project.brand_name || project.name}
-PRODUCT: ${project.product_description || ''}
-
-AVATAR (excerpt):
-${avatarSnippet}
-
-OFFER BRIEF (excerpt):
-${offerSnippet}
-
-Return ONLY a short angle phrase (3-10 words). No explanation, no quotes, no numbering. Just the angle.
-Examples of good angles: "the 3am bathroom trip nobody talks about", "why your doctor never mentioned this", "what grandma knew that science just proved"`,
+      content: buildAngleGenerationPrompt({ project, avatarSnippet, offerSnippet }),
     }], SINGLE_AD_TEXT_MODEL, { max_tokens: 100, operation: 'ad_angle_generation', projectId: req.params.projectId });
 
     const angle = result.trim().replace(/^["'"]+|["'"]+$/g, '');
@@ -348,27 +337,7 @@ router.post('/:projectId/generate-headline', async (req, res) => {
 
     const result = await chat([{
       role: 'user',
-      content: `You are a world-class direct response copywriter who writes scroll-stopping Facebook ad headlines for health/wellness products targeting women 55-75.
-
-BRAND: ${project.brand_name || project.name}
-PRODUCT: ${project.product_description || ''}
-${angle ? `AD ANGLE: "${angle}"` : ''}
-
-AVATAR (excerpt):
-${avatarSnippet}
-
-OFFER BRIEF (excerpt):
-${offerSnippet}
-
-${researchSnippet ? `RESEARCH (excerpt):\n${researchSnippet}` : ''}
-
-Write ONE scroll-stopping headline that:
-- Sounds like something a real person would say, not marketing copy
-- Is specific and emotional
-- Speaks directly to the target audience
-- ${angle ? `Focuses on the angle: "${angle}"` : 'Picks a compelling angle from the docs'}
-
-Return ONLY the headline text. No quotes, no labels, no explanation. Under 15 words.`,
+      content: buildHeadlineGenerationPrompt({ project, angle, avatarSnippet, offerSnippet, researchSnippet }),
     }], SINGLE_AD_TEXT_MODEL, { max_tokens: 150, operation: 'ad_headline_generation', projectId: req.params.projectId });
 
     const headline = result.trim().replace(/^["'"]+|["'"]+$/g, '');
