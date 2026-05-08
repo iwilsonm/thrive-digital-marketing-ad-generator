@@ -1079,6 +1079,8 @@ function buildServerQueueItem(active, existing = null) {
 
 const FINISHED_TEST_RUN_TTL_MS = 5 * 60 * 1000;
 const ACTIVE_TEST_RUN_TTL_MS = 2 * 60 * 60 * 1000;
+const TEST_RUN_FINAL_RECONCILE_ATTEMPTS = 3;
+const TEST_RUN_START_MATCH_WINDOW_MS = 60 * 1000;
 const LEGACY_AUTO_POST_LOG_IMPORT_TEXT = "does not provide an export named 'createAutoPostLog'";
 
 function getQueueRunId(item) {
@@ -1095,7 +1097,11 @@ function getQueueErrorText(item) {
 }
 
 function isTerminalQueueItem(item) {
-  return item?.status === 'complete' || item?.status === 'error';
+  return item?.status === 'complete' || item?.status === 'completed' || item?.status === 'error';
+}
+
+function isQueueRunComplete(item) {
+  return item?.status === 'complete' || item?.status === 'completed' || isDurableRunSuccess(item?.result);
 }
 
 function isLegacyAutoPostLogQueueItem(item) {
@@ -1130,6 +1136,39 @@ function getDurableRunId(run) {
 
 function isDurableRunActive(run) {
   return run?.status === 'running' || run?.terminal_status === 'waiting_on_gemini';
+}
+
+function isDurableRunSuccess(run) {
+  return run?.status === 'completed' && run?.terminal_status === 'deployed';
+}
+
+function isDurableRunFailure(run) {
+  return run?.status === 'failed' || String(run?.terminal_status || '').includes('failed') || run?.terminal_status === 'cancelled';
+}
+
+function getDurableRunTimeMs(run) {
+  const value = run?.run_at || run?.created_at || run?.started_at;
+  if (typeof value === 'number') return value;
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function findDurableRunForQueueItem(runs, queueItem) {
+  const safeRuns = ensureArray(runs, 'AgentMonitor.director.findDurableRunForQueueItem');
+  const queueRunId = getQueueRunId(queueItem);
+  if (queueRunId) {
+    const matchedById = safeRuns.find(run => getDurableRunId(run) === queueRunId);
+    if (matchedById) return matchedById;
+  }
+
+  const startedAt = Number(queueItem?.startTime || 0);
+  if (!startedAt) return null;
+
+  return safeRuns.find((run) => {
+    if (run?.run_type && run.run_type !== 'test') return false;
+    const runTime = getDurableRunTimeMs(run);
+    return runTime > 0 && Math.abs(runTime - startedAt) <= TEST_RUN_START_MATCH_WINDOW_MS;
+  }) || null;
 }
 
 const VALID_AGENT_TABS = ['director', 'filter'];
@@ -1460,7 +1499,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   const safeTestRunQueue = ensureArray(testRunQueue, 'AgentMonitor.director.testRunQueue');
   const activeRun = safeTestRunQueue.find(r => r.status === 'running');
   const queuedCount = safeTestRunQueue.filter(r => r.status === 'queued').length;
-  const finishedRuns = safeTestRunQueue.filter(r => r.status === 'complete' || r.status === 'error');
+  const finishedRuns = safeTestRunQueue.filter(r => isTerminalQueueItem(r));
   const activeRunRecord = activeRun?.result || null;
   const activeRunRounds = getRunRounds(activeRunRecord);
   const activeRunBatches = getRunBatches(activeRunRecord);
@@ -2009,6 +2048,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
           phase: event.phase || event.background_message || 'Still processing in background...',
           result: event,
           serverRunId: event.runId || null,
+          finalReconcileAttempts: 0,
         });
       } else if (event.type === 'error') {
         const cancelled = event.terminal_status === 'cancelled' || event.message === 'Cancelled by user';
@@ -2056,6 +2096,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
               startTime: running.startTime || res.active.startTime,
               result: res.active.result || running.result || null,
               serverRunId: res.active.runId || res.active.id || running.serverRunId || null,
+              finalReconcileAttempts: 0,
             });
           } else {
             setTestRunQueue(prev => {
@@ -2075,16 +2116,13 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
           return;
         }
 
-        // No active tracker: check the durable run record before deciding the run is done.
-        const runRes = await api.getConductorRuns(selectedProject, 5);
+        // No active tracker: reconcile against durable conductor_runs before deciding the run is done.
+        const runRes = await api.getConductorRuns(selectedProject, 20);
         const safeRuns = ensureArray(runRes?.runs, 'AgentMonitor.director.runs');
         setRuns(safeRuns);
         setRunsLoadedFor(selectedProject);
-        const runningServerRunId = running.serverRunId || null;
-        const matchedRun = runningServerRunId
-          ? safeRuns.find(run => getDurableRunId(run) === runningServerRunId)
-          : null;
-        const activeDurableRun = safeRuns.find(run => isDurableRunActive(run));
+        const matchedRun = findDurableRunForQueueItem(safeRuns, running);
+        const activeDurableRun = getQueueRunId(running) ? null : safeRuns.find(run => isDurableRunActive(run));
         const durableRun = matchedRun || activeDurableRun || null;
 
         if (durableRun && isDurableRunActive(durableRun)) {
@@ -2099,23 +2137,51 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
         }
 
         if (!durableRun) {
+          const attempts = Number(running.finalReconcileAttempts || 0) + 1;
+          if (attempts <= TEST_RUN_FINAL_RECONCILE_ATTEMPTS) {
+            updateQueueItem(running.id, {
+              status: 'running',
+              sseConnected: false,
+              progress: Math.max(running.progress || 0, 22),
+              phase: 'Checking final run status...',
+              finalReconcileAttempts: attempts,
+              serverRunId: running.serverRunId || null,
+            });
+            return;
+          }
+
           updateQueueItem(running.id, {
             status: 'error',
             progress: 0,
-            phase: 'No active test run was found for this progress item. Refreshing run history...',
+            phase: 'No durable test run record was found after background handoff. Refreshing run history...',
+            finalReconcileAttempts: attempts,
             serverRunId: running.serverRunId || null,
           });
           finishRun(running.id, true);
           return;
         }
 
-        const succeeded = durableRun?.status === 'completed';
+        const succeeded = isDurableRunSuccess(durableRun);
+        const failed = isDurableRunFailure(durableRun);
+        if (!succeeded && !failed) {
+          updateQueueItem(running.id, {
+            status: 'running',
+            progress: Math.max(running.progress || 0, durableRun?.terminal_status === 'waiting_on_gemini' ? 22 : running.progress || 0),
+            phase: durableRun?.decisions || 'Checking final run status...',
+            result: durableRun || null,
+            serverRunId: getDurableRunId(durableRun) || running.serverRunId || null,
+            finalReconcileAttempts: 0,
+          });
+          return;
+        }
+
         updateQueueItem(running.id, {
           status: succeeded ? 'complete' : 'error',
           progress: succeeded ? 100 : 0,
           phase: succeeded ? (durableRun?.decisions || 'Complete') : (durableRun?.failure_reason || durableRun?.error || 'Failed'),
           result: durableRun || null,
           serverRunId: getDurableRunId(durableRun) || running.serverRunId || null,
+          finalReconcileAttempts: 0,
         });
         finishRun(running.id, !succeeded);
         return; // Stop polling
@@ -2682,23 +2748,24 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
         <div className="mb-4 space-y-2">
           {finishedRuns.map(run => {
             const queueRunId = getQueueRunId(run);
+            const complete = isQueueRunComplete(run);
             return (
               <div
                 key={run.id}
                 className={`flex items-start gap-2 px-3 py-2 rounded-lg text-[11px] ${
-                  run.status === 'complete' ? 'bg-ed-green/5 border border-ed-green/20' : 'bg-ed-rust/10 border border-ed-rust/30'
+                  complete ? 'bg-ed-green/5 border border-ed-green/20' : 'bg-ed-rust/10 border border-ed-rust/30'
                 }`}
               >
                 <span className="mt-0.5 shrink-0">
-                  {run.status === 'complete' ? (
+                  {complete ? (
                     <svg className="w-3.5 h-3.5 text-ed-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                   ) : (
                     <svg className="w-3.5 h-3.5 text-ed-rust" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   )}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className={`font-medium ${run.status === 'complete' ? 'text-ed-green' : 'text-ed-rust'}`}>
-                    {run.status === 'complete' ? 'Test Run Complete' : 'Test Run Failed'}
+                  <p className={`font-medium ${complete ? 'text-ed-green' : 'text-ed-rust'}`}>
+                    {complete ? 'Test Run Complete' : 'Test Run Failed'}
                   </p>
                   {queueRunId && (
                     <p className="text-[10px] text-ed-ink3 mt-0.5">Run {queueRunId.slice(0, 8)}</p>

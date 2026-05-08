@@ -1,5 +1,10 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-08 — Test-run UI background handoff reconciliation
+
+- Test-run frontend now reconciles local queue items against durable `conductor_runs` state when SSE active-run polling goes empty after the background handoff.
+- Added a short "Checking final run status..." grace state before declaring a missing durable run failed, and normalized completed/deployed durable rows so they always render as successful queue results.
+
 ## 2026-05-08 — Creative Director heartbeat + test-run handoff
 
 - Added `last_heartbeat_at` to `conductor_runs` and updated the stale-generation sweeper to prefer it before older run timestamps, with a defensive fallback to active spawned-batch heartbeats while a Director test run is waiting on Gemini.
