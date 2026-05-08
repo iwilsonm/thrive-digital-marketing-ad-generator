@@ -313,10 +313,12 @@ export async function runBatch(batchId, onProgress, options = {}) {
 
     await throwIfCancelled();
     // Store prompts with headline/body in DB (exclude base64 image data to keep DB size reasonable)
+    console.log(`[BatchProcessor] Stage 3 prompts generated; persisting ${prompts.length} prompts to Convex (batch ${batchId.slice(0, 8)})`);
     await updateBatchHeartbeat(batchId, {
       gpt_prompts: JSON.stringify(prompts.map(serializePromptForStorage)),
       status: 'submitting'
     });
+    console.log(`[BatchProcessor] Prompts persisted; preparing Gemini Batch submission (batch ${batchId.slice(0, 8)})`);
     emit({ type: 'status', status: 'submitting', message: 'Submitting to Gemini Batch API...' });
 
     // Load product image if configured (from Convex storage)

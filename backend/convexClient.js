@@ -66,13 +66,30 @@ export function getConvexHost() {
 // default retry predicate (which checks status codes) would never retry them.
 // We retry on: Server Error (transient Convex platform issues), fetch failed,
 // ECONNRESET, and other network errors.
-function convexShouldRetry(err) {
+function isConvexTransientInternalServerErrorMessage(msg) {
+  if (!msg) return false;
+  const hasTransientCode = /InternalServerError/i.test(msg);
+  const hasTransientMessage = /Your request couldn['’]t be completed/i.test(msg);
+  if (hasTransientCode && hasTransientMessage) return true;
+
+  try {
+    const parsed = JSON.parse(msg);
+    return parsed?.code === 'InternalServerError'
+      && /Your request couldn['’]t be completed/i.test(parsed?.message || '');
+  } catch {
+    return false;
+  }
+}
+
+export function convexShouldRetry(err) {
   const msg = err.message || '';
   // Convex wraps validation/business errors in "Server Error" text. Retrying
   // those only makes user-facing failures feel slow without changing outcome.
   if (/ArgumentValidationError|Value does not match validator|Object is missing the required field|INVALID_DEPLOYMENTS|does not belong to this project|already exists|Could not find public function|Did you forget to run `npx convex dev`/i.test(msg)) {
     return false;
   }
+  // Convex/Vercel platform JSON error — transient platform-side 500.
+  if (isConvexTransientInternalServerErrorMessage(msg)) return true;
   // Convex "Server Error" — can be transient platform issues (502/503 from Cloudflare)
   if (/Server Error/i.test(msg)) return true;
   // Network / connection errors
