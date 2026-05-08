@@ -1,5 +1,9 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-08 — Cold-scroll angle prompt
+
+- Angle-gen prompt template delivered via Copy LLM Prompt now produces cold-scroll-aware angles: Symptom Pattern asks for recurring recognition patterns, Scene to Center asks for emotional truth rather than literal moments, and a new AI Rendering Warning explains that structured fields may be rendered verbatim by the ad system.
+
 ## 2026-05-08 — Test-run UI background handoff reconciliation
 
 - Test-run frontend now reconciles local queue items against durable `conductor_runs` state when SSE active-run polling goes empty after the background handoff.
