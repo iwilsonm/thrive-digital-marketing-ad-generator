@@ -14,6 +14,7 @@ const LEASE_MS = 4 * 60 * 1000;
 const PRE_GEMINI_STALE_MS = 6 * 60 * 1000;
 const SAVING_RESULTS_STALE_MS = 10 * 60 * 1000;
 const MAX_BATCH_RUNS_PER_TICK = 1;
+const MAX_QUEUED_TEST_STARTS_PER_TICK = 1;
 const PRE_GEMINI_RETRY_LIMIT = 2;
 const ACTIVE_STATUSES = new Set(['queued', 'generating_prompts', 'submitting', 'processing', 'saving_results']);
 
@@ -288,6 +289,11 @@ async function resumeBackgroundDirectorTests() {
   return state.lastConductorResumeResult;
 }
 
+async function runQueuedDirectorTests(owner) {
+  const { startQueuedTestRuns } = await import('./conductorEngine.js');
+  return await startQueuedTestRuns({ owner, limit: MAX_QUEUED_TEST_STARTS_PER_TICK, leaseMs: LEASE_MS });
+}
+
 async function schedulerTick(options = {}) {
   if (tickInProgress) return;
   tickInProgress = true;
@@ -296,12 +302,13 @@ async function schedulerTick(options = {}) {
   try {
     await pollActiveBatches(owner);
     const conductorResumeResult = await resumeBackgroundDirectorTests();
+    const conductorQueueResult = await runQueuedDirectorTests(owner);
     await runDueScheduledBatches();
     const queueResult = await runQueuedBatches(owner);
     state.lastTickAt = new Date().toISOString();
     state.lastError = null;
     state.lastCronResult = queueResult;
-    return { success: true, scheduler: getSchedulerStatus(), queue: queueResult, conductor: conductorResumeResult };
+    return { success: true, scheduler: getSchedulerStatus(), queue: queueResult, conductor: conductorResumeResult, conductorQueue: conductorQueueResult };
   } catch (err) {
     state.lastError = err.message;
     console.error('[Scheduler] Tick failed:', err.message);

@@ -12,6 +12,10 @@ const mockGetConductorPlaybook = vi.fn();
 const mockCreateConductorRun = vi.fn();
 const mockUpdateConductorRun = vi.fn();
 const mockGetConductorRuns = vi.fn();
+const mockEnqueueConductorTestRun = vi.fn();
+const mockClaimQueuedConductorTestRun = vi.fn();
+const mockReleaseQueuedConductorTestRun = vi.fn();
+const mockCancelQueuedConductorTestRun = vi.fn();
 const mockGetConductorSlotsByPostingDay = vi.fn();
 const mockCreateConductorSlot = vi.fn();
 const mockUpdateConductorSlot = vi.fn();
@@ -60,6 +64,10 @@ vi.mock('../convexClient.js', () => ({
   createConductorRun: (...args) => mockCreateConductorRun(...args),
   updateConductorRun: (...args) => mockUpdateConductorRun(...args),
   getConductorRuns: (...args) => mockGetConductorRuns(...args),
+  enqueueConductorTestRun: (...args) => mockEnqueueConductorTestRun(...args),
+  claimQueuedConductorTestRun: (...args) => mockClaimQueuedConductorTestRun(...args),
+  releaseQueuedConductorTestRun: (...args) => mockReleaseQueuedConductorTestRun(...args),
+  cancelQueuedConductorTestRun: (...args) => mockCancelQueuedConductorTestRun(...args),
   getConductorSlotsByPostingDay: (...args) => mockGetConductorSlotsByPostingDay(...args),
   createConductorSlot: (...args) => mockCreateConductorSlot(...args),
   updateConductorSlot: (...args) => mockUpdateConductorSlot(...args),
@@ -229,6 +237,10 @@ describe('conductorEngine test-run pipeline', () => {
       .mockReturnValueOnce('batch-uuid-3');
 
     mockGetConductorRuns.mockResolvedValue([]);
+    mockEnqueueConductorTestRun.mockResolvedValue({ queued: true, run: { externalId: 'queued-run-1', queue_position: 1 } });
+    mockClaimQueuedConductorTestRun.mockResolvedValue({ claimed: false, reason: 'none_available' });
+    mockReleaseQueuedConductorTestRun.mockResolvedValue({ released: true });
+    mockCancelQueuedConductorTestRun.mockResolvedValue({ cancelled: false, reason: 'not_queued' });
     mockGetConductorConfig.mockResolvedValue({ enabled: true });
     mockGetProject.mockResolvedValue(makeProject());
     mockGetActiveConductorAngles.mockResolvedValue([makeAngle()]);
@@ -318,6 +330,61 @@ describe('conductorEngine test-run pipeline', () => {
       required_passes: 5,
       ads_per_round: 5,
     }));
+  });
+
+  it('queues a test run when another test run is already scoring for the same project', async () => {
+    mockGetConductorRuns.mockResolvedValueOnce([
+      {
+        externalId: 'active-run',
+        project_id: 'proj-1',
+        run_type: 'test',
+        status: 'scoring',
+      },
+    ]);
+
+    const { runFullTestPipeline } = await importConductorEngine();
+    const result = await runFullTestPipeline('proj-1', () => {}, { angleOverride: 'angle-1', adsPerAdSetTarget: 5 });
+
+    expect(result).toMatchObject({
+      queued: true,
+      runId: 'queued-run-1',
+      queue_position: 1,
+    });
+    expect(mockEnqueueConductorTestRun).toHaveBeenCalledWith(expect.objectContaining({
+      project_id: 'proj-1',
+      queued_angle_id: 'angle-1',
+      required_passes: 5,
+    }));
+    expect(mockCreateBatchJob).not.toHaveBeenCalled();
+  });
+
+  it('queues a test run when a scheduled Director run is active for the same project', async () => {
+    mockGetConductorRuns.mockResolvedValueOnce([
+      {
+        externalId: 'scheduled-run',
+        project_id: 'proj-1',
+        run_type: 'planning',
+        status: 'running',
+      },
+    ]);
+
+    const { runFullTestPipeline } = await importConductorEngine();
+    const result = await runFullTestPipeline('proj-1', () => {}, { angleOverride: 'angle-1', adsPerAdSetTarget: 5 });
+
+    expect(result.queued).toBe(true);
+    expect(mockEnqueueConductorTestRun).toHaveBeenCalled();
+    expect(mockCreateBatchJob).not.toHaveBeenCalled();
+  });
+
+  it('cancels a queued durable test run by runId without touching active batches', async () => {
+    mockCancelQueuedConductorTestRun.mockResolvedValueOnce({ cancelled: true });
+
+    const { cancelTestRun } = await importConductorEngine();
+    const result = await cancelTestRun('proj-1', { runId: 'queued-run-1' });
+
+    expect(result).toBe(true);
+    expect(mockCancelQueuedConductorTestRun).toHaveBeenCalledWith('queued-run-1');
+    expect(mockUpdateBatchJob).not.toHaveBeenCalled();
   });
 
   it('passes the selected approved-ad target into Ready-to-Post finalization', async () => {

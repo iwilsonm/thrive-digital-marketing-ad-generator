@@ -588,10 +588,19 @@ export default defineSchema({
     error_stage: v.optional(v.string()),
     scoring_started_at: v.optional(v.number()),
     last_heartbeat_at: v.optional(v.string()),
+    queue_position: v.optional(v.number()),
+    queued_at: v.optional(v.string()),
+    started_at: v.optional(v.string()),
+    queued_angle_id: v.optional(v.string()),
+    worker_lease_owner: v.optional(v.string()),
+    worker_lease_expires_at: v.optional(v.string()),
     created_at: v.number(),
   })
     .index("by_externalId", ["externalId"])
-    .index("by_project", ["project_id"]),
+    .index("by_project", ["project_id"])
+    .index("by_status_and_queue_position", ["status", "queue_position"])
+    .index("by_project_and_status", ["project_id", "status"])
+    .index("by_project_status_queue_position", ["project_id", "status", "queue_position"]),
 
   conductor_slots: defineTable({
     externalId: v.string(),

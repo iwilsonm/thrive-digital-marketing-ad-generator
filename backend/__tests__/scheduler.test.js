@@ -10,6 +10,7 @@ const mockQueueScheduledBatchRun = vi.fn();
 const mockPollBatchJob = vi.fn();
 const mockRunBatch = vi.fn();
 const mockResumeBackgroundTestRuns = vi.fn();
+const mockStartQueuedTestRuns = vi.fn();
 
 vi.mock('../convexClient.js', () => ({
   getActiveBatchJobs: (...args) => mockGetActiveBatchJobs(...args),
@@ -28,6 +29,7 @@ vi.mock('../services/batchProcessor.js', () => ({
 
 vi.mock('../services/conductorEngine.js', () => ({
   resumeBackgroundTestRuns: (...args) => mockResumeBackgroundTestRuns(...args),
+  startQueuedTestRuns: (...args) => mockStartQueuedTestRuns(...args),
 }));
 
 const batch = (overrides = {}) => ({
@@ -55,6 +57,7 @@ describe('batch scheduler', () => {
     mockPollBatchJob.mockResolvedValue('processing');
     mockRunBatch.mockResolvedValue();
     mockResumeBackgroundTestRuns.mockResolvedValue({ checked: 0, resumed: 0, errors: 0 });
+    mockStartQueuedTestRuns.mockResolvedValue({ checked: 0, started: 0, queued_remaining: 0, errors: 0 });
   });
 
   it('requeues stale pre-Gemini batches before failing them', async () => {
@@ -122,6 +125,10 @@ describe('batch scheduler', () => {
 
     expect(mockPollBatchJob).toHaveBeenCalledWith('batch-001');
     expect(mockResumeBackgroundTestRuns).toHaveBeenCalledTimes(1);
+    expect(mockStartQueuedTestRuns).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 1,
+      owner: 'test-owner',
+    }));
     expect(result.conductor).toEqual({ checked: 1, resumed: 1, errors: 0 });
   });
 

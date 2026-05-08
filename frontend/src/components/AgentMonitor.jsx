@@ -934,6 +934,37 @@ function buildServerQueueItem(active, existing = null) {
   };
 }
 
+function buildDurableQueueItem(run, existing = null) {
+  const runId = getDurableRunId(run);
+  const isQueued = run?.status === 'queued';
+  const isCancelled = run?.status === 'cancelled' || run?.terminal_status === 'cancelled';
+  return {
+    id: existing?.id || runId || crypto.randomUUID(),
+    status: isCancelled
+      ? 'error'
+      : isQueued
+        ? 'queued'
+        : isDurableRunSuccess(run)
+          ? 'complete'
+          : isDurableRunFailure(run)
+            ? 'error'
+            : 'running',
+    progress: isQueued ? 0 : (existing?.progress || (run?.terminal_status === 'waiting_on_gemini' ? 22 : 0)),
+    phase: isQueued
+      ? `Queued${run?.queue_position ? ` at position ${run.queue_position}` : ''}.`
+      : (run?.decisions || existing?.phase || 'Still processing in background...'),
+    startTime: existing?.startTime || run?.started_at || run?.run_at || run?.created_at || Date.now(),
+    result: run || existing?.result || null,
+    angleId: existing?.angleId || run?.queued_angle_id || null,
+    adsPerAdSetTarget: run?.required_passes || existing?.adsPerAdSetTarget || 5,
+    templateTag: run?.template_tag || existing?.templateTag || '',
+    sseConnected: false,
+    serverRunId: runId,
+    serverQueued: isQueued,
+    queuePosition: run?.queue_position || null,
+  };
+}
+
 const FINISHED_TEST_RUN_TTL_MS = 5 * 60 * 1000;
 const ACTIVE_TEST_RUN_TTL_MS = 2 * 60 * 60 * 1000;
 const TEST_RUN_FINAL_RECONCILE_ATTEMPTS = 3;
@@ -992,7 +1023,7 @@ function getDurableRunId(run) {
 }
 
 function isDurableRunActive(run) {
-  return run?.status === 'running' || run?.terminal_status === 'waiting_on_gemini';
+  return ['running', 'scoring', 'repairing', 'processing'].includes(run?.status) || run?.terminal_status === 'waiting_on_gemini';
 }
 
 function isDurableRunSuccess(run) {
@@ -1000,7 +1031,7 @@ function isDurableRunSuccess(run) {
 }
 
 function isDurableRunFailure(run) {
-  return run?.status === 'failed' || String(run?.terminal_status || '').includes('failed') || run?.terminal_status === 'cancelled';
+  return run?.status === 'failed' || run?.status === 'cancelled' || String(run?.terminal_status || '').includes('failed') || run?.terminal_status === 'cancelled';
 }
 
 function getDurableRunTimeMs(run) {
@@ -1347,14 +1378,15 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   const [testAdSetTargetDraft, setTestAdSetTargetDraft] = useState('');
   const [testTemplateTag, setTestTemplateTag] = useState('');
 
-  // Test run queue — persisted per project so restored runs cannot bleed across projects.
-  const queueStorageKey = selectedProject ? `dacia_testRunQueue:${selectedProject}` : 'dacia_testRunQueue';
+  // Test run queue — now server-backed. Legacy browser-local queues are cleared
+  // on project load so stale pre-deploy items cannot render or auto-start.
   const [testRunQueue, setTestRunQueue] = useState(() => {
     return [];
   });
   const [queueLoadedFor, setQueueLoadedFor] = useState('');
   const safeTestRunQueue = ensureArray(testRunQueue, 'AgentMonitor.director.testRunQueue');
   const activeRun = safeTestRunQueue.find(r => r.status === 'running');
+  const queuedRuns = safeTestRunQueue.filter(r => r.status === 'queued' || r.status === 'queueing');
   const queuedCount = safeTestRunQueue.filter(r => r.status === 'queued').length;
   const finishedRuns = safeTestRunQueue.filter(r => isTerminalQueueItem(r));
   const activeRunRecord = activeRun?.result || null;
@@ -1371,14 +1403,9 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
     if (!selectedProject) return;
     setQueueLoadedFor('');
     try {
-      const saved = localStorage.getItem(`dacia_testRunQueue:${selectedProject}`);
-      if (!saved) {
-        setTestRunQueue([]);
-        setQueueLoadedFor(selectedProject);
-        return;
-      }
-      const parsed = ensureArray(JSON.parse(saved), 'AgentMonitor.director.savedRunQueue');
-      setTestRunQueue(cleanupSavedTestRunQueue(parsed));
+      localStorage.removeItem(`dacia_testRunQueue:${selectedProject}`);
+      localStorage.removeItem('dacia_testRunQueue');
+      setTestRunQueue([]);
       setQueueLoadedFor(selectedProject);
     } catch {
       setTestRunQueue([]);
@@ -1386,12 +1413,39 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
     }
   }, [selectedProject]);
 
-  // Sync queue to localStorage on every change
   useEffect(() => {
-    if (!selectedProject) return;
-    if (queueLoadedFor !== selectedProject) return;
-    localStorage.setItem(queueStorageKey, JSON.stringify(safeTestRunQueue));
-  }, [queueLoadedFor, queueStorageKey, safeTestRunQueue, selectedProject]);
+    if (!selectedProject || queueLoadedFor !== selectedProject) return;
+    let cancelled = false;
+
+    const loadServerQueue = async () => {
+      try {
+        const queueRes = await api.getConductorTestQueue(selectedProject, 50);
+        if (cancelled || selectedProjectRef.current !== selectedProject) return;
+        const durableRuns = ensureArray(queueRes?.runs ?? queueRes, 'AgentMonitor.director.serverTestRunQueue');
+        setTestRunQueue(prev => {
+          const safePrev = ensureArray(prev, 'AgentMonitor.director.mergeServerTestRunQueue');
+          const byRunId = new Map(safePrev.map(item => [getQueueRunId(item), item]).filter(([id]) => !!id));
+          const serverItems = durableRuns.map(run => buildDurableQueueItem(run, byRunId.get(getDurableRunId(run))));
+          const serverIds = new Set(serverItems.map(getQueueRunId).filter(Boolean));
+          const localItems = safePrev.filter(item => {
+            const runId = getQueueRunId(item);
+            if (runId && serverIds.has(runId)) return false;
+            return !item.serverQueued && (item.status === 'queued' || item.status === 'running' || isTerminalQueueItem(item));
+          });
+          return cleanupSavedTestRunQueue([...serverItems, ...localItems]);
+        });
+      } catch {
+        // Existing progress polling still reconciles active runs; keep queue polling quiet.
+      }
+    };
+
+    loadServerQueue();
+    const interval = setInterval(loadServerQueue, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [queueLoadedFor, selectedProject]);
 
   // Auto-clear finished results after 5 minutes
   useEffect(() => {
@@ -1722,6 +1776,60 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
       sseConnected: false,
       serverRunId: null,
     };
+
+    if (activeRun || queuedCount > 0) {
+      setTestRunQueue(prev => [...prev, { ...queueItem, status: 'queueing', phase: 'Adding to queue...' }]);
+      const body = {
+        ...(queueItem.angleId ? { angle_id: queueItem.angleId } : {}),
+        ads_per_ad_set: queueItem.adsPerAdSetTarget || 5,
+        ...(queueItem.templateTag ? { template_tag: queueItem.templateTag } : {}),
+      };
+      const { done } = api.triggerConductorTestRun(selectedProject, body, (event) => {
+        if (event.type === 'progress') {
+          updateQueueItem(queueItem.id, {
+            status: 'running',
+            sseConnected: true,
+            phase: event.message || 'Starting test run...',
+            progress: typeof event.progressValue === 'number' ? event.progressValue : 0,
+          });
+        } else if (event.type === 'queued') {
+          updateQueueItem(queueItem.id, {
+            status: 'queued',
+            phase: event.message || `Queued at position ${event.queue_position || queuedCount + 1}.`,
+            serverRunId: event.runId || null,
+            serverQueued: true,
+            queuePosition: event.queue_position || null,
+            result: event,
+          });
+        } else if (event.type === 'background') {
+          updateQueueItem(queueItem.id, {
+            status: 'running',
+            sseConnected: false,
+            progress: 22,
+            phase: event.phase || event.background_message || 'Still processing in background...',
+            result: event,
+            serverRunId: event.runId || null,
+          });
+        } else if (event.type === 'complete') {
+          updateQueueItem(queueItem.id, {
+            status: 'complete',
+            progress: 100,
+            phase: 'Complete',
+            result: event,
+            serverRunId: event.runId || null,
+          });
+        } else if (event.type === 'error') {
+          updateQueueItem(queueItem.id, { status: 'error', progress: 0, phase: event.message || 'Failed to queue test run', result: event });
+        }
+      });
+      done.catch((err) => {
+        updateQueueItem(queueItem.id, { status: 'error', progress: 0, phase: err.message || 'Failed to queue test run' });
+        toast.error(err.message || 'Failed to queue test run');
+      });
+      setSubTab('history');
+      return;
+    }
+
     setTestRunQueue(prev => [...prev, queueItem]);
     setSubTab('history');
   };
@@ -1765,7 +1873,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
       phase: 'Cancel requested. Asking Gemini/background processing to stop...',
     });
     try {
-      const res = await api.cancelTestRun(selectedProject);
+      const res = await api.cancelTestRun(selectedProject, getQueueRunId(activeRun));
       if (!res?.cancelled) {
         updateQueueItem(activeRun.id, { status: 'error', progress: 0, phase: 'No active run found to cancel.' });
         setRunningAction(null);
@@ -1787,14 +1895,35 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   }, [activeRun, cancelingRunId, selectedProject, updateQueueItem]);
 
   // Remove a queued (not yet running) test run
-  const handleRemoveQueued = useCallback((runId) => {
+  const handleRemoveQueued = useCallback(async (runId) => {
+    const queued = safeTestRunQueue.find(r => r.id === runId);
+    const serverRunId = getQueueRunId(queued);
+    if (serverRunId) {
+      try {
+        await api.cancelTestRun(selectedProject, serverRunId);
+      } catch (err) {
+        toast.error(err.message || 'Could not cancel queued run');
+        return;
+      }
+    }
     setTestRunQueue(prev => prev.filter(r => r.id !== runId));
-  }, []);
+  }, [safeTestRunQueue, selectedProject, toast]);
 
   // Clear all queued runs
-  const handleClearQueue = useCallback(() => {
-    setTestRunQueue(prev => prev.filter(r => r.status !== 'queued'));
-  }, []);
+  const handleClearQueue = useCallback(async () => {
+    const queued = safeTestRunQueue.filter(r => r.status === 'queued' || r.status === 'queueing');
+    for (const run of queued) {
+      const serverRunId = getQueueRunId(run);
+      if (!serverRunId) continue;
+      try {
+        await api.cancelTestRun(selectedProject, serverRunId);
+      } catch (err) {
+        toast.error(err.message || 'Could not clear queued run');
+        return;
+      }
+    }
+    setTestRunQueue(prev => prev.filter(r => r.status !== 'queued' && r.status !== 'queueing'));
+  }, [safeTestRunQueue, selectedProject, toast]);
 
   const loadLPDetailsForBatch = useCallback(async (batchId) => {
     if (!selectedProject || !batchId) return;
@@ -1827,7 +1956,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   useEffect(() => {
     if (!selectedProject || queueLoadedFor !== selectedProject) return;
     const running = testRunQueue.find(r => r.status === 'running');
-    const nextQueued = testRunQueue.find(r => r.status === 'queued');
+    const nextQueued = testRunQueue.find(r => r.status === 'queued' && !r.serverQueued && !getQueueRunId(r));
 
     // If there's a running item with a live SSE connection, nothing to do
     if (running && sseActiveRef.current) return;
@@ -1906,6 +2035,19 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
           result: event,
           serverRunId: event.runId || null,
           finalReconcileAttempts: 0,
+        });
+      } else if (event.type === 'queued') {
+        sseActiveRef.current = false;
+        abortRef.current = null;
+        updateQueueItem(runId, {
+          status: 'queued',
+          sseConnected: false,
+          serverQueued: true,
+          progress: 0,
+          phase: event.message || `Queued at position ${event.queue_position || 1}.`,
+          result: event,
+          serverRunId: event.runId || null,
+          queuePosition: event.queue_position || null,
         });
       } else if (event.type === 'error') {
         const cancelled = event.terminal_status === 'cancelled' || event.message === 'Cancelled by user';
@@ -2513,7 +2655,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
             className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors flex items-center gap-1 disabled:opacity-50"
             title={!selectedAngleId ? 'Select a test angle first.' : `Create a test ad set with ${testAdSetTargetValue} approved ads.`}
           >
-            {activeRun ? <><Spinner /> {queuedCount > 0 ? `Running (${queuedCount} queued)` : 'Running...'}</> : queuedCount > 0 ? `Queue Run (${queuedCount} queued)` : 'Test Run'}
+            {activeRun ? <><Spinner /> {queuedRuns.length > 0 ? `Running (${queuedRuns.length} queued)` : 'Running...'}</> : queuedRuns.length > 0 ? `Queue Run (${queuedRuns.length} queued)` : 'Test Run'}
           </button>
         </div>
       </div>
@@ -2586,17 +2728,38 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
           )}
         </div>
       )}
-      {queuedCount > 0 && (
-        <div className="flex items-center gap-2 mb-4">
-          <p className="text-[10px] text-ed-ink3">
-            {queuedCount} run{queuedCount !== 1 ? 's' : ''} queued{activeRun ? '' : ', waiting...'}
-          </p>
-          <button
-            onClick={handleClearQueue}
-            className="text-[10px] text-ed-ink3 hover:text-ed-rust transition-colors"
-          >
-            Clear queue
-          </button>
+      {queuedRuns.length > 0 && (
+        <div className="mb-4 rounded-lg border border-black/5 bg-black/[0.02] px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] text-ed-ink3">
+              {queuedRuns.length} run{queuedRuns.length !== 1 ? 's' : ''} queued{activeRun ? '' : ', waiting for the scheduler...'}
+            </p>
+            <button
+              onClick={handleClearQueue}
+              className="text-[10px] text-ed-ink3 hover:text-ed-rust transition-colors"
+            >
+              Clear queue
+            </button>
+          </div>
+          <div className="mt-2 space-y-1.5">
+            {queuedRuns.map((run, index) => (
+              <div key={run.id} className="flex items-center justify-between gap-3 rounded-md bg-ed-surface/70 border border-black/5 px-2 py-1.5">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium text-ed-ink">
+                    Position {run.queuePosition || index + 1}
+                    {run.result?.runId || run.serverRunId ? <span className="text-ed-ink3 font-normal"> · Run {(run.result?.runId || run.serverRunId).slice(0, 8)}</span> : null}
+                  </p>
+                  <p className="text-[10px] text-ed-ink3 truncate">{run.phase || 'Queued behind the current Creative Director run.'}</p>
+                </div>
+                <button
+                  onClick={() => handleRemoveQueued(run.id)}
+                  className="text-[10px] text-ed-rust hover:text-ed-rust font-medium px-2 py-0.5 rounded hover:bg-ed-rust/5 transition-colors shrink-0"
+                >
+                  Cancel
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

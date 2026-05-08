@@ -2487,9 +2487,45 @@ export async function getConductorRuns(projectId, limit = 50) {
   return ensureArray(await cachedQuery('conductor', api.conductor.getRuns, { projectId, limit }), 'convexClient.getConductorRuns');
 }
 
+export async function getConductorTestQueue(projectId, limit = 50) {
+  return ensureArray(await queryWithRetry(api.conductor.getTestRunQueue, { projectId, limit }), 'convexClient.getConductorTestQueue');
+}
+
 export async function createConductorRun(fields) {
   await mutationWithRetry(api.conductor.createRun, fields);
   invalidateQueryCache('conductor');
+}
+
+export async function enqueueConductorTestRun(fields) {
+  const result = await mutationWithRetry(api.conductor.enqueueTestRun, fields);
+  invalidateQueryCache('conductor');
+  return result;
+}
+
+export async function claimQueuedConductorTestRun(owner, leaseMs = 4 * 60 * 1000) {
+  const now = new Date();
+  const result = await mutationWithRetry(api.conductor.claimQueuedTestRun, {
+    owner,
+    now: now.toISOString(),
+    lease_expires_at: new Date(now.getTime() + leaseMs).toISOString(),
+  });
+  invalidateQueryCache('conductor');
+  return result;
+}
+
+export async function releaseQueuedConductorTestRun(id, owner) {
+  const result = await mutationWithRetry(api.conductor.releaseQueuedTestRun, { externalId: id, owner });
+  invalidateQueryCache('conductor');
+  return result;
+}
+
+export async function cancelQueuedConductorTestRun(id) {
+  const result = await mutationWithRetry(api.conductor.cancelQueuedTestRun, {
+    externalId: id,
+    now: new Date().toISOString(),
+  });
+  invalidateQueryCache('conductor');
+  return result;
 }
 
 const ALLOWED_CONDUCTOR_RUN_UPDATE_FIELDS = [
@@ -2516,6 +2552,12 @@ const ALLOWED_CONDUCTOR_RUN_UPDATE_FIELDS = [
   'error_stage',
   'scoring_started_at',
   'last_heartbeat_at',
+  'queue_position',
+  'queued_at',
+  'started_at',
+  'queued_angle_id',
+  'worker_lease_owner',
+  'worker_lease_expires_at',
 ];
 
 export async function updateConductorRun(id, fields) {
