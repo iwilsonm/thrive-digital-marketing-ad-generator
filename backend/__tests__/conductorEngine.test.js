@@ -335,6 +335,30 @@ describe('conductorEngine test-run pipeline', () => {
     }));
   });
 
+  it('hands test-run Gemini waits to background resume before the Vercel ceiling', async () => {
+    let now = Date.parse('2026-05-08T10:00:00.000Z');
+    vi.spyOn(Date, 'now').mockImplementation(() => {
+      now += 70_000;
+      return now;
+    });
+    mockPollBatchJob.mockResolvedValue('processing');
+
+    const { runFullTestPipeline } = await importConductorEngine();
+    const result = await runFullTestPipeline('proj-1', () => {}, { angleOverride: 'angle-1', adsPerAdSetTarget: 3 });
+
+    expect(result).toMatchObject({
+      terminal_status: 'waiting_on_gemini',
+      run_in_background: true,
+    });
+    expect(mockUpdateConductorRun).toHaveBeenCalledWith(result.runId, expect.objectContaining({
+      status: 'running',
+      terminal_status: 'waiting_on_gemini',
+      error_stage: 'gemini_waiting',
+      last_heartbeat_at: expect.any(String),
+    }));
+    expect(mockScoreBatchForInlineFilter).not.toHaveBeenCalled();
+  });
+
   it('preflights and persists the selected template tag for test-run batches', async () => {
     mockScoreBatchForInlineFilter.mockResolvedValueOnce(makeScoreResult(1, 1, 1));
 
@@ -657,7 +681,7 @@ describe('conductorEngine test-run pipeline', () => {
     const result = await resumeBackgroundTestRuns();
 
     expect(result).toEqual({ checked: 1, resumed: 1, errors: 0 });
-    expect(mockScoreBatchForInlineFilter).toHaveBeenCalledWith('batch-uuid-2', 'proj-1', null, expect.objectContaining({
+    expect(mockScoreBatchForInlineFilter).toHaveBeenCalledWith('batch-uuid-2', 'proj-1', expect.any(Function), expect.objectContaining({
       roundNumber: 2,
     }));
     expect(mockUpdateConductorRun).toHaveBeenCalledWith('run-uuid-1', expect.objectContaining({

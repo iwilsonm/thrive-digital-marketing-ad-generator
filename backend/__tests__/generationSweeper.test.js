@@ -48,6 +48,13 @@ describe('generation sweeper', () => {
       created_at: Date.parse('2026-05-06T03:00:00.000Z'),
       run_at: Date.parse('2026-05-06T03:10:00.000Z'),
       scoring_started_at: Date.parse('2026-05-06T03:57:00.000Z'),
+      last_heartbeat_at: '2026-05-06T03:58:00.000Z',
+    })).toBe(Date.parse('2026-05-06T03:58:00.000Z'));
+
+    expect(getConductorHeartbeatTime({
+      created_at: Date.parse('2026-05-06T03:00:00.000Z'),
+      run_at: Date.parse('2026-05-06T03:10:00.000Z'),
+      scoring_started_at: Date.parse('2026-05-06T03:57:00.000Z'),
     })).toBe(Date.parse('2026-05-06T03:57:00.000Z'));
   });
 
@@ -128,6 +135,73 @@ describe('generation sweeper', () => {
       error_stage: 'stale_generation_sweeper',
     });
     expect(runUpdates[0].error).toContain('[STALE]');
+  });
+
+  it('does not mark a conductor run stale when last_heartbeat_at is fresh even if run_at is old', async () => {
+    const { sweeper, runUpdates } = harness({
+      runs: [{
+        externalId: 'run-fresh-heartbeat',
+        project_id: 'project-1',
+        status: 'running',
+        run_at: Date.parse('2026-05-06T03:40:00.000Z'),
+        created_at: Date.parse('2026-05-06T03:40:00.000Z'),
+        last_heartbeat_at: '2026-05-06T03:57:00.000Z',
+      }],
+    });
+
+    const result = await sweeper();
+
+    expect(result.healed).toHaveLength(0);
+    expect(runUpdates).toHaveLength(0);
+  });
+
+  it('marks a conductor run stale when last_heartbeat_at is also old', async () => {
+    const { sweeper, runUpdates } = harness({
+      runs: [{
+        externalId: 'run-old-heartbeat',
+        project_id: 'project-1',
+        status: 'running',
+        run_at: Date.parse('2026-05-06T03:40:00.000Z'),
+        created_at: Date.parse('2026-05-06T03:40:00.000Z'),
+        last_heartbeat_at: '2026-05-06T03:44:00.000Z',
+      }],
+    });
+
+    const result = await sweeper();
+
+    expect(result.healed).toHaveLength(1);
+    expect(runUpdates[0]).toMatchObject({
+      id: 'run-old-heartbeat',
+      status: 'failed',
+      terminal_status: 'stale_generation_sweeper',
+      error_stage: 'stale_generation_sweeper',
+    });
+  });
+
+  it('uses active batch heartbeat for conductor runs waiting on Gemini', async () => {
+    const { sweeper, runUpdates } = harness({
+      batches: [{
+        id: 'batch-active',
+        project_id: 'project-1',
+        status: 'processing',
+        created_at: '2026-05-06T03:30:00.000Z',
+        last_heartbeat_at: '2026-05-06T03:58:00.000Z',
+      }],
+      runs: [{
+        externalId: 'run-waiting',
+        project_id: 'project-1',
+        status: 'running',
+        terminal_status: 'waiting_on_gemini',
+        run_at: Date.parse('2026-05-06T03:30:00.000Z'),
+        created_at: Date.parse('2026-05-06T03:30:00.000Z'),
+        batches_created: JSON.stringify([{ batch_id: 'batch-active' }]),
+      }],
+    });
+
+    const result = await sweeper();
+
+    expect(result.healed).toHaveLength(0);
+    expect(runUpdates).toHaveLength(0);
   });
 
   it('persists successful sweep telemetry', async () => {

@@ -62,8 +62,32 @@ export function getBatchHeartbeatTime(batch) {
     ?? parseTime(batch?.created_at);
 }
 
-export function getConductorHeartbeatTime(run) {
-  return parseTime(run?.scoring_started_at)
+function parseJSON(value, fallback = null) {
+  if (!value) return fallback;
+  try { return JSON.parse(value); }
+  catch { return fallback; }
+}
+
+function getConductorBatchHeartbeatTime(run, batches = []) {
+  const terminalStatus = String(run?.terminal_status || '');
+  if (!['waiting_on_gemini', 'queued_round', 'building_round'].includes(terminalStatus)) return null;
+
+  const batchInfos = parseJSON(run?.batches_created, []);
+  if (!Array.isArray(batchInfos) || batchInfos.length === 0) return null;
+
+  const batchIds = new Set(batchInfos.map((info) => info?.batch_id).filter(Boolean));
+  const times = (batches || [])
+    .filter((batch) => batchIds.has(batch?.id) || batchIds.has(batch?.externalId))
+    .map(getBatchHeartbeatTime)
+    .filter(Number.isFinite);
+
+  return times.length > 0 ? Math.max(...times) : null;
+}
+
+export function getConductorHeartbeatTime(run, batches = []) {
+  return parseTime(run?.last_heartbeat_at)
+    ?? parseTime(run?.scoring_started_at)
+    ?? getConductorBatchHeartbeatTime(run, batches)
     ?? parseTime(run?.run_at)
     ?? parseTime(run?.created_at);
 }
@@ -151,8 +175,8 @@ export function createGenerationSweeper(customDeps = {}) {
       healed.push(summarizeRecord('batch_jobs', { ...batch, error_message: message }, heartbeatMs, nowMs));
     };
 
-    const healConductorRun = async (run) => {
-      const heartbeatMs = getConductorHeartbeatTime(run);
+    const healConductorRun = async (run, batches = []) => {
+      const heartbeatMs = getConductorHeartbeatTime(run, batches);
       if (!ACTIVE_CONDUCTOR_STATUSES.has(run.status || '') || !isOlderThan(heartbeatMs, cutoffMs)) return;
       const message = repairPrefix('Creative Director run', run, heartbeatMs, nowMs);
       await deps.updateConductorRun(run.externalId, {
@@ -190,7 +214,7 @@ export function createGenerationSweeper(customDeps = {}) {
       }
 
       for (const run of conductorRuns || []) {
-        try { await healConductorRun(run); }
+        try { await healConductorRun(run, batches || []); }
         catch (err) {
           updateFailures.push({ kind: 'conductor_runs', id: run.externalId, error: err.message });
           deps.console.warn(`[generation-sweeper] failed to heal conductor run ${run.externalId}: ${err.message}`);

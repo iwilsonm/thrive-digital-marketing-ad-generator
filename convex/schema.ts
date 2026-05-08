@@ -587,6 +587,7 @@ export default defineSchema({
     rounds_json: v.optional(v.string()),
     error_stage: v.optional(v.string()),
     scoring_started_at: v.optional(v.number()),
+    last_heartbeat_at: v.optional(v.string()),
     created_at: v.number(),
   })
     .index("by_externalId", ["externalId"])

@@ -602,6 +602,7 @@ export const createRun = mutation({
     rounds_json: v.optional(v.string()),
     error_stage: v.optional(v.string()),
     scoring_started_at: v.optional(v.number()),
+    last_heartbeat_at: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("conductor_runs", {
@@ -636,6 +637,7 @@ export const updateRun = mutation({
     rounds_json: v.optional(v.string()),
     error_stage: v.optional(v.string()),
     scoring_started_at: v.optional(v.number()),
+    last_heartbeat_at: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const run = await ctx.db

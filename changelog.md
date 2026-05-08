@@ -1,5 +1,11 @@
 # ThriveCampaigns — Changelog
 
+## 2026-05-08 — Creative Director heartbeat + test-run handoff
+
+- Added `last_heartbeat_at` to `conductor_runs` and updated the stale-generation sweeper to prefer it before older run timestamps, with a defensive fallback to active spawned-batch heartbeats while a Director test run is waiting on Gemini.
+- Creative Director test runs now hand Gemini waits back to the background scheduler after a short inline wait instead of holding the SSE function open toward Vercel's 800s ceiling.
+- Filter scoring now refreshes the conductor run heartbeat while ads are scored, so long scoring rounds do not look stale.
+
 ## 2026-05-08 — Ecommerce-default cleanup
 
 - Comprehensive ecommerce-default cleanup. Stopped BOF auto-seeding; deleted existing BOF rows from production after deploy.

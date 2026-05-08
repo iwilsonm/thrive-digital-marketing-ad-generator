@@ -14,7 +14,7 @@ import {
   getConductorConfig, upsertConductorConfig,
   getActiveConductorAngles, updateConductorAngle, getSystemDefaultAngle, createConductorAngle,
   getConductorPlaybook,
-  createConductorRun, updateConductorRun, getConductorRuns,
+  createConductorRun as createConductorRunRaw, updateConductorRun as updateConductorRunRaw, getConductorRuns,
   getConductorSlotsByPostingDay, createConductorSlot, updateConductorSlot,
   createBatchJob, getBatchJob, updateBatchJob,
   getAdsByBatchId, getAd,
@@ -1034,11 +1034,29 @@ const TEST_RUN_DEFAULT_TARGET = 5;
 const TEST_RUN_MAX_ROUNDS = 5;
 const TEST_RUN_REFILL_MULTIPLIER = 2;
 const TEST_RUN_ORCHESTRATION_FAILURE_STATUS = 'orchestration_failed';
-const TEST_RUN_GEMINI_WAIT_MS = 30 * 60 * 1000;
+const TEST_RUN_INLINE_GEMINI_WAIT_MS = 60 * 1000;
 const TEST_RUN_SCORING_STALE_MS = 10 * 60 * 1000;
 const TEST_RUN_ROUND_CAP_TERMINAL_STATUS = 'failed_under_threshold_after_round_cap';
 const DIRECTOR_SCORE_THRESHOLD = 7;
 const TEST_RUN_CANCELLED_STATUS = 'cancelled';
+
+function conductorHeartbeatAt() {
+  return new Date().toISOString();
+}
+
+async function createConductorRun(fields) {
+  return await createConductorRunRaw({
+    ...fields,
+    last_heartbeat_at: fields.last_heartbeat_at || conductorHeartbeatAt(),
+  });
+}
+
+async function updateConductorRun(id, fields) {
+  return await updateConductorRunRaw(id, {
+    ...fields,
+    last_heartbeat_at: fields.last_heartbeat_at || conductorHeartbeatAt(),
+  });
+}
 
 function stringifyJSON(value, fallback = '[]') {
   try {
@@ -1636,11 +1654,11 @@ async function executeTestBatchRound(batchId, roundNumber, emit, shouldCancel = 
     const secs = elapsed % 60;
     const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 
-    if (Date.now() - pollStart > TEST_RUN_GEMINI_WAIT_MS) {
+    if (Date.now() - pollStart > TEST_RUN_INLINE_GEMINI_WAIT_MS) {
       return {
         deferred: true,
         step: 'gemini_waiting',
-        message: getGeminiTimeoutMessage(roundNumber),
+        message: getBackgroundWaitingMessage(roundNumber),
       };
     }
 
@@ -2726,6 +2744,7 @@ async function markTestRunWaitingOnGemini({
   await updateConductorRun(runId, {
     status: 'running',
     terminal_status: 'waiting_on_gemini',
+    error_stage: 'gemini_waiting',
     error: '',
     failure_reason: '',
     posting_days: angleName ? getTestPostingDays(angleName) : stringifyJSON([{ date: 'test', action: 'Waiting on Gemini' }]),
@@ -2901,7 +2920,18 @@ async function continueBackgroundTestRun(run) {
 
     const roundNumber = batchInfo.round || (roundDetails.length + 1);
     backgroundErrorStage = 'filter_scoring';
-    const roundScoreResult = await scoreBatchForInlineFilter(batchInfo.batch_id, projectId, null, {
+    const roundScoreResult = await scoreBatchForInlineFilter(batchInfo.batch_id, projectId, (event) => {
+      if (event?.step === 'filter_scoring') {
+        updateConductorRun(runId, {
+          status: 'scoring',
+          terminal_status: 'filter_scoring',
+          error_stage: 'filter_scoring',
+          decisions: event.message || `Round ${roundNumber}: Creative Filter QA is scoring generated ads...`,
+        }).catch((err) => {
+          console.warn(`[Director] Could not heartbeat scoring run ${runId.slice(0, 8)}: ${err.message}`);
+        });
+      }
+    }, {
       roundNumber,
       totalRounds: TEST_RUN_MAX_ROUNDS,
       shouldCancel: () => throwIfDurableTestRunCancelled(projectId, runId).then(() => false).catch((err) => {
@@ -3670,7 +3700,19 @@ export async function runFullTestPipeline(projectId, sendEvent, { angleOverride 
       const roundScoreResult = await scoreBatchForInlineFilter(
         batchInfo.batch_id,
         projectId,
-        (event) => emit(withTestProgress(roundNumber, event)),
+        (event) => {
+          emit(withTestProgress(roundNumber, event));
+          if (event?.step === 'filter_scoring') {
+            updateConductorRun(runId, {
+              status: 'scoring',
+              terminal_status: 'filter_scoring',
+              error_stage: 'filter_scoring',
+              decisions: event.message || `Round ${roundNumber}: Creative Filter QA is scoring generated ads...`,
+            }).catch((err) => {
+              console.warn(`[Director] Could not heartbeat scoring run ${runId.slice(0, 8)}: ${err.message}`);
+            });
+          }
+        },
         {
           roundNumber,
           totalRounds: TEST_RUN_MAX_ROUNDS,

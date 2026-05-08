@@ -2475,8 +2475,38 @@ export async function createConductorRun(fields) {
   invalidateQueryCache('conductor');
 }
 
+const ALLOWED_CONDUCTOR_RUN_UPDATE_FIELDS = [
+  'status',
+  'error',
+  'batches_created',
+  'angles_generated',
+  'decisions',
+  'duration_ms',
+  'posting_days',
+  'terminal_status',
+  'failure_reason',
+  'required_passes',
+  'ads_per_round',
+  'template_tag',
+  'max_rounds',
+  'total_rounds',
+  'total_ads_generated',
+  'total_ads_scored',
+  'total_ads_passed',
+  'ready_to_post_count',
+  'flex_ad_id',
+  'rounds_json',
+  'error_stage',
+  'scoring_started_at',
+  'last_heartbeat_at',
+];
+
 export async function updateConductorRun(id, fields) {
-  await mutationWithRetry(api.conductor.updateRun, { externalId: id, ...fields });
+  const updates = {};
+  for (const field of ALLOWED_CONDUCTOR_RUN_UPDATE_FIELDS) {
+    if (fields[field] !== undefined) updates[field] = fields[field];
+  }
+  await mutationWithRetry(api.conductor.updateRun, { externalId: id, ...updates });
   invalidateQueryCache('conductor');
 }
 
