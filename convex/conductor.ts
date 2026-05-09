@@ -243,7 +243,7 @@ export const createAngle = mutation({
   },
 });
 
-export const seedDefaultBofAngle = mutation({
+export const seedDirectOfferAngle = mutation({
   args: {
     externalId: v.string(),
     project_id: v.string(),
@@ -271,20 +271,20 @@ export const seedDefaultBofAngle = mutation({
       .withIndex("by_project", (q) => q.eq("project_id", args.project_id))
       .collect();
 
-    const defaultBof = existing.find((angle) => angle.source === "default_bof");
-    if (defaultBof) {
-      return { created: false, reason: "default_bof_exists", externalId: defaultBof.externalId };
+    const directOffer = existing.find((angle) => angle.source === "direct_offer" || angle.source === "default_bof");
+    if (directOffer) {
+      return { created: false, reason: "direct_offer_exists", externalId: directOffer.externalId };
     }
 
-    const namedBof = existing.find((angle) => /^BOF\b/i.test(angle.name || ""));
-    if (namedBof) {
-      return { created: false, reason: "bof_name_exists", externalId: namedBof.externalId };
+    const namedDirectOffer = existing.find((angle) => /^Direct Offer$/i.test(angle.name || "") || /^BOF\b/i.test(angle.name || ""));
+    if (namedDirectOffer) {
+      return { created: false, reason: "direct_offer_name_exists", externalId: namedDirectOffer.externalId };
     }
 
     const now = Date.now();
     await ctx.db.insert("conductor_angles", {
       ...args,
-      source: "default_bof",
+      source: "direct_offer",
       status: args.status || "active",
       priority: args.priority || "medium",
       is_system_default: true,

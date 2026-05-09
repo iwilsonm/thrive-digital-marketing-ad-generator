@@ -354,7 +354,7 @@ describe('batch pipeline', () => {
 
     it('keeps Path-B valid non-literal-scene headlines moving through prompt generation', async () => {
       const pathBAngleBrief = {
-        name: 'BOF - Discernment Before Commitment',
+        name: 'Direct Offer',
         frame: 'objection-first',
         core_buyer: 'A Christian adult comparing counseling paths before committing to training.',
         symptom_pattern: 'They keep comparing licensure, ministry, and certificate options but do not want to be pushed into one program.',

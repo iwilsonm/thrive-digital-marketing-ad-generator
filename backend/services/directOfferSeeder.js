@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { chat, extractJSON } from './anthropic.js';
 import { getOfferRenderContext } from './adGenerator.js';
 import { buildDescriptionFromBrief } from '../utils/angleParser.js';
-import { getConductorAngles, seedDefaultBofAngle } from '../convexClient.js';
+import { getConductorAngles, seedDirectOfferAngle } from '../convexClient.js';
 
 export const REQUIRED_DOC_TYPES = ['research', 'avatar', 'offer_brief', 'necessary_beliefs'];
 const VALID_FRAMES = ['symptom-first', 'scam', 'objection-first', 'identity-first', 'MAHA', 'news-first', 'consequence-first'];
@@ -53,30 +53,31 @@ function assertNoUnjustifiedContamination(angle, project, foundationalDocs) {
     output.includes(keyword.toLowerCase()) && !allowedBySource(keyword, project, foundationalDocs)
   ));
   if (violations.length > 0) {
-    throw new Error(`Default BOF seed contained unsupported ecommerce claims: ${violations.join(', ')}`);
+    throw new Error(`Direct Offer seed contained unsupported ecommerce claims: ${violations.join(', ')}`);
   }
 }
 
-export function projectAlreadyHasBofAngle(angles = []) {
+export function projectAlreadyHasDirectOfferAngle(angles = []) {
   return (angles || []).some((angle) => (
-    angle?.source === 'default_bof' || /^BOF\b/i.test(text(angle?.name))
+    angle?.source === 'direct_offer'
+      || angle?.source === 'default_bof'
+      || /^Direct Offer$/i.test(text(angle?.name))
+      || /^BOF\b/i.test(text(angle?.name))
   ));
 }
 
-export function buildDefaultBofPrompt(project = {}, foundationalDocs = []) {
+export function buildDirectOfferPrompt(project = {}, foundationalDocs = []) {
   const docs = docsArrayToMap(foundationalDocs);
   const offerRenderContext = getOfferRenderContext(project, docs);
   const docBlock = REQUIRED_DOC_TYPES
-    .map((type) => `[${type}]\n${compact(docs[type]?.content || '(missing)', 5000)}`)
-    .join('\n\n');
+    .map((type) => `[${type}] ${compact(docs[type]?.content || '(missing)', 5000)}`)
+    .join('\n');
 
-  const system = `You generate one default bottom-of-funnel ad angle for a direct-response ad platform. You must return only valid JSON. You are not writing ads; you are creating a structured angle brief that downstream AI will use literally.
+  const system = `You generate a single "Direct Offer" angle for a direct-response ad platform. This is the default angle every project gets — its job is to drive headlines that name the audience, name the offer, and ask for the action. Plain English. No metaphors, no scene imagery, no narrative storytelling, no insider jargon.
 
-The angle must be niche-aware. Use the project materials and offer rendering context. Do not import generic ecommerce proof, guarantees, shipping claims, customer counts, star ratings, review snippets, discounts, or purchase CTA language unless those exact claims or ecommerce conditions are present in the provided project materials.
-
-The output must use this exact JSON shape:
+Return only valid JSON in this exact shape:
 {
-  "name": "BOF - <short niche-aware label>",
+  "name": "Direct Offer",
   "status": "active",
   "priority": "medium",
   "frame": "objection-first",
@@ -87,43 +88,52 @@ The output must use this exact JSON shape:
   "objection": "...",
   "emotional_state": "...",
   "scene": "...",
-  "desired_belief_shift": "After this ad, they should believe that ...",
+  "desired_belief_shift": "...",
   "tone": "...",
   "avoid_list": "...",
   "prompt_hints": "..."
 }
 
-Rules:
-- Name must start with "BOF - ".
-- Use one valid frame only: symptom-first, scam, objection-first, identity-first, MAHA, news-first, consequence-first.
-- This is bottom-of-funnel positioning: the prospect is close to action but needs final clarity, reassurance, fit confirmation, or next-step confidence.
-- For non-physical/service/webinar/education offers, shape the action around sign-up, registration, consultation, clarity call, application, booking, or the project-specific next step. Do not use product purchase language.
-- For ecommerce/physical product offers, product and purchase language is allowed only when the offer rendering context explicitly indicates ecommerce/physical-product eligibility.
-- Do not invent proof claims, customer counts, guarantees, shipping, discounts, testimonials, statistics, reviewer names, review scores, or deadlines.
-- The scene must be a recurring, cold-scroll-readable pattern, not a timestamped literal prop scene.
-- prompt_hints should guide creative direction without hardcoded claims. It may mention visual anchors appropriate to the offer rendering context.`;
+Field rules:
+
+- core_buyer: Name the audience plainly. "[Identity] who are considering [offer/topic]." No demographic narrative.
+- symptom_pattern: One direct sentence — what they'd say if asked "what are you trying to figure out?" NOT an emotional pattern, NOT a scene.
+- failed_solutions: One line. Context, not headline material.
+- current_belief: One line.
+- objection: One line — their main hesitation about clicking the offer.
+- emotional_state: One line — but not used as scene material.
+- scene: CRITICAL — this field most strongly biases headline generation. Do NOT describe a literal moment, kitchen table, home desk, notepad, Bible-nearby, etc. Instead, describe the cold-scroll moment instructionally: "The moment they see the ad in feed: they have no prior context, they have 1-2 seconds to decide whether to stop. The headline must name who it's for and what's offered so they can decide instantly." Treat this field as instructional metadata to the headline generator, not narrative.
+- desired_belief_shift: One line — what the ad should accomplish.
+- tone: "Direct, plain, action-oriented. No hype, no metaphors, no narrative voice. Like a Facebook ad that names the offer."
+- avoid_list: Explicit prohibitions. Include verbatim: "Scene-bound metaphors (kitchen-table, home-desk, notepad, Bible-nearby imagery), insider marketing jargon (funnel, pitch, pipeline), narrative storytelling, hyper-specific moments or props, second-person scene descriptions, anything that requires creative translation to make sense in a 5-word headline. Headlines should name the audience, name the offer plainly, and let the offer do the asking."
+- prompt_hints: Clean image direction appropriate to the offer rendering context. Service businesses → text-forward, audience-relevant imagery, clear CTA. Ecommerce → product visual, social proof, offer-focused. NEVER invent specific claims, statistics, customer counts, star ratings, or testimonial text.
+
+Banned content unless explicitly present in source materials:
+- "Shop Now", "90-day guarantee", "10,000+ happy customers", "Free shipping"
+- Star rating claims, specific testimonial quotes, customer-volume statistics`;
 
   const user = `Project name: ${project?.name || ''}
 Brand: ${project?.brand_name || project?.name || ''}
 Niche: ${project?.niche || ''}
-Product description:
-${compact(project?.product_description || '(not provided)', 4000)}
-
-Offer rendering context:
-${offerRenderContext}
-
+Product description: ${compact(project?.product_description || '(not provided)', 4000)}
+Offer rendering context: ${offerRenderContext}
 Foundational docs:
 ${docBlock}
 
-Generate exactly one default BOF angle JSON object.`;
+Generate exactly one Direct Offer angle JSON object that, when fed to a downstream headline generator, will produce headlines like:
+- "Considering Christian Counseling? Free Webinar Compares All 3 Paths"
+- "5 Questions to Ask Before Becoming a Christian Counselor"
+- "Confused About Christian Counseling Requirements? Free Webinar"
+- "Get Clear on Christian Counseling: Free 30-Minute Webinar"
+(Adapt naming to the actual project's audience and offer.)`;
 
   return { system, user, offerRenderContext };
 }
 
-export function normalizeDefaultBofAngle(rawAngle, project = {}, foundationalDocs = []) {
+export function normalizeDirectOfferAngle(rawAngle, project = {}, foundationalDocs = []) {
   const angle = rawAngle && typeof rawAngle === 'object' ? rawAngle : {};
   const normalized = {
-    name: text(angle.name).startsWith('BOF') ? text(angle.name) : `BOF - ${text(angle.name) || 'Final Step Confidence'}`,
+    name: 'Direct Offer',
     status: 'active',
     priority: ['highest', 'high', 'medium', 'test'].includes(text(angle.priority)) ? text(angle.priority) : 'medium',
     frame: VALID_FRAMES.includes(text(angle.frame)) ? text(angle.frame) : 'objection-first',
@@ -143,7 +153,7 @@ export function normalizeDefaultBofAngle(rawAngle, project = {}, foundationalDoc
   const missing = ['core_buyer', 'symptom_pattern', 'objection', 'scene', 'desired_belief_shift']
     .filter((field) => !normalized[field]);
   if (missing.length > 0) {
-    throw new Error(`Default BOF seed missing required fields: ${missing.join(', ')}`);
+    throw new Error(`Direct Offer seed missing required fields: ${missing.join(', ')}`);
   }
 
   normalized.description = buildDescriptionFromBrief(normalized);
@@ -151,12 +161,12 @@ export function normalizeDefaultBofAngle(rawAngle, project = {}, foundationalDoc
   return normalized;
 }
 
-export async function generateDefaultBofAngleContent(project, foundationalDocs, options = {}) {
+export async function generateDirectOfferAngleContent(project, foundationalDocs, options = {}) {
   if (!hasCompleteFoundationalDocs(foundationalDocs)) {
-    throw new Error('Default BOF seed requires all foundational docs.');
+    throw new Error('Direct Offer seed requires all foundational docs.');
   }
 
-  const { system, user } = buildDefaultBofPrompt(project, foundationalDocs);
+  const { system, user } = buildDirectOfferPrompt(project, foundationalDocs);
   const chatImpl = options.chatImpl || chat;
   const response = await chatImpl(
     [
@@ -167,17 +177,17 @@ export async function generateDefaultBofAngleContent(project, foundationalDocs, 
     {
       response_format: { type: 'json_object' },
       max_tokens: 3000,
-      operation: 'default_bof_seed',
+      operation: 'direct_offer_seed',
       projectId: project?.id || project?.externalId || null,
     }
   );
   const parsed = typeof response === 'string' ? extractJSON(response) : response;
-  return normalizeDefaultBofAngle(parsed, project, foundationalDocs);
+  return normalizeDirectOfferAngle(parsed, project, foundationalDocs);
 }
 
-export async function seedDefaultBofAngleForProject(project, foundationalDocs, options = {}) {
+export async function seedDirectOfferAngleForProject(project, foundationalDocs, options = {}) {
   const projectId = project?.id || project?.externalId;
-  if (!projectId) throw new Error('Project id is required for default BOF seeding.');
+  if (!projectId) throw new Error('Project id is required for Direct Offer seeding.');
 
   if (!hasCompleteFoundationalDocs(foundationalDocs)) {
     return { created: false, reason: 'missing_foundational_docs', project_id: projectId };
@@ -185,12 +195,12 @@ export async function seedDefaultBofAngleForProject(project, foundationalDocs, o
 
   const getAnglesImpl = options.getAnglesImpl || getConductorAngles;
   const existingAngles = options.existingAngles || await getAnglesImpl(projectId);
-  if (projectAlreadyHasBofAngle(existingAngles)) {
-    return { created: false, reason: 'bof_exists', project_id: projectId };
+  if (projectAlreadyHasDirectOfferAngle(existingAngles)) {
+    return { created: false, reason: 'direct_offer_exists', project_id: projectId };
   }
 
-  const content = await generateDefaultBofAngleContent(project, foundationalDocs, options);
-  const seedImpl = options.seedImpl || seedDefaultBofAngle;
+  const content = await generateDirectOfferAngleContent(project, foundationalDocs, options);
+  const seedImpl = options.seedImpl || seedDirectOfferAngle;
   const result = await seedImpl({
     id: options.idFactory ? options.idFactory() : uuidv4(),
     project_id: projectId,

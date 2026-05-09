@@ -360,7 +360,7 @@ function isPassed(result) {
 }
 
 async function checkEligibility(parent, allAngles, resultsByAngle, cfg, force) {
-  if (parent.is_system_default) return 'BOF system default';
+  if (parent.is_system_default) return 'Direct Offer system default';
   if (parent.derivation_in_progress) return 'derivation in progress';
 
   if (parent.derivation_attempt_failed_at) {

@@ -514,7 +514,7 @@ export default defineSchema({
     name: v.string(),                    // short label
     description: v.string(),             // detailed angle for prompt injection (auto-computed from structured fields)
     prompt_hints: v.optional(v.string()), // specific creative direction
-    source: v.string(),                  // "manual" | "imported" | "auto_generated" | "default_bof" | "system" (legacy read-only)
+    source: v.string(),                  // "manual" | "imported" | "auto_generated" | "direct_offer" | "system" (legacy read-only)
     status: v.string(),                  // "active" | "testing" | "archived"
     focused: v.optional(v.boolean()),    // When true + active, Director only uses focused angles
     tags: v.optional(v.array(v.string())),
@@ -532,7 +532,7 @@ export default defineSchema({
     tone: v.optional(v.string()),
     avoid_list: v.optional(v.string()),  // "Avoid" — renamed to avoid JS keyword
     destination_urls: v.optional(v.string()), // JSON array of LP URLs for this angle (overrides project default)
-    is_system_default: v.optional(v.boolean()), // True for auto-created default angles (e.g., BOF)
+    is_system_default: v.optional(v.boolean()), // True for auto-created default angles (e.g., Direct Offer)
     // Operational fields
     times_used: v.number(),
     last_used_at: v.optional(v.number()),

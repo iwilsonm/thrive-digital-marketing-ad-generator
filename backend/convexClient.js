@@ -2469,10 +2469,10 @@ export async function createConductorAngle({ id, project_id, name, description, 
   invalidateQueryCache('conductor');
 }
 
-export async function seedDefaultBofAngle({ id, project_id, name, description, prompt_hints, status,
+export async function seedDirectOfferAngle({ id, project_id, name, description, prompt_hints, status,
   priority, frame, core_buyer, symptom_pattern, failed_solutions, current_belief,
   objection, emotional_state, scene, desired_belief_shift, tone, avoid_list, tags }) {
-  const result = await mutationWithRetry(api.conductor.seedDefaultBofAngle, {
+  const result = await mutationWithRetry(api.conductor.seedDirectOfferAngle, {
     externalId: id,
     project_id,
     name,

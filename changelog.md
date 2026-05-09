@@ -17,7 +17,7 @@
 
 ## 2026-05-08 — Ecommerce-default cleanup
 
-- Comprehensive ecommerce-default cleanup. Stopped BOF auto-seeding; deleted existing BOF rows from production after deploy.
+- Comprehensive ecommerce-default cleanup. Replaced the legacy BOF default with Direct Offer seeding and deleted existing BOF rows from production after deploy.
 - Stage 3 image prompts are now offer-agnostic by default: no hardcoded product visuals, proof badges, trust elements, or female-only "this woman" framing for non-ecommerce offers.
 - `docGenerator` synthesis prompts no longer prime as "my ecommerce brand that sells"; Stage 0/1 copy prompts now use offer/person language, removed sleep/bathroom remnants, and rewrote headline lanes to avoid testimonial/product-review fabrication.
 

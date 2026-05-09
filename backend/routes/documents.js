@@ -14,7 +14,7 @@ import {
 } from '../services/docGenerator.js';
 import { getHistory, logManualEdit, applyCorrections, revertCorrection } from '../services/correctionHistory.js';
 import { streamService } from '../utils/sseHelper.js';
-import { seedDefaultBofAngleForProject } from '../services/bofSeeder.js';
+import { seedDirectOfferAngleForProject } from '../services/directOfferSeeder.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -36,9 +36,9 @@ async function checkAndPromoteDocStatus(projectId) {
 
     if (allDocsExist) {
       try {
-        await seedDefaultBofAngleForProject(project, docs);
+        await seedDirectOfferAngleForProject(project, docs);
       } catch (seedErr) {
-        console.error('[Docs] Default BOF seed error:', seedErr.message);
+        console.error('[Docs] Direct Offer seed error:', seedErr.message);
       }
     }
   } catch (err) {
