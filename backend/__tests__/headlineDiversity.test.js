@@ -65,6 +65,33 @@ describe('headline scene alignment', () => {
     expect(result.survivors).toHaveLength(1);
     expect(result.rejected).toHaveLength(0);
   });
+
+  it('does not hard-lock Path-B style scene fields without explicit required concepts', () => {
+    const pathBAngle = {
+      frame: 'objection-first',
+      core_buyer: 'A Christian adult comparing counseling paths before committing to training.',
+      symptom_pattern: 'They keep comparing licensure, ministry, and certificate options but do not want to be pushed into one program.',
+      objection: 'They worry a free webinar will become another enrollment pitch.',
+      scene: 'A person sitting at a kitchen table with a Bible nearby, a notepad of half-formed questions, and a laptop open to a counseling program page.',
+    };
+
+    const profile = buildSceneLockProfile(pathBAngle);
+    expect(profile).toBeNull();
+
+    const result = filterSceneAlignedHeadlines([
+      {
+        headline: "Worried you'll be pushed to a program? Map options first.",
+        hook_lane: 'objection_reversal',
+        core_claim: 'map options before pressure',
+        target_symptom: 'fear of being pushed into one program',
+      },
+    ], pathBAngle);
+
+    expect(result.sceneLocked).toBe(false);
+    expect(result.survivors).toHaveLength(1);
+    expect(result.survivors[0].headline).toBe("Worried you'll be pushed to a program? Map options first.");
+    expect(result.rejected).toHaveLength(0);
+  });
 });
 
 describe('headline angle-signal filtering', () => {

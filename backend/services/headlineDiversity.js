@@ -413,9 +413,11 @@ export function buildSceneLockProfile(angleBrief) {
   const sourceText = `${scene} ${symptomPattern}`;
   const concepts = buildSceneConcepts(sourceText, angleBrief);
   const requiredConcepts = concepts.filter((concept) => concept.required).map((concept) => concept.key);
+  if (requiredConcepts.length === 0) return null;
+
   const minConceptMatches = Math.min(
     concepts.length,
-    requiredConcepts.length > 0 ? Math.max(2, requiredConcepts.length) : 2
+    Math.max(2, requiredConcepts.length)
   );
 
   return {

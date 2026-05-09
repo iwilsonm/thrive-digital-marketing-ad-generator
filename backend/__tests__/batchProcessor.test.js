@@ -43,6 +43,7 @@ vi.mock('../convexClient.js', () => ({
   claimBatchResultsProcessing: (...args) => mockClaimBatchResultsProcessing(...args),
   getRecentHeadlineHistoryByAngle: (...args) => mockGetRecentHeadlineHistoryByAngle(...args),
   recordHeadlineHistory: (...args) => mockRecordHeadlineHistory(...args),
+  getCompletedDirectorBatchStats: vi.fn().mockResolvedValue([]),
   getAdSet: vi.fn().mockResolvedValue(null),
   createAdSet: vi.fn().mockResolvedValue(),
   ensureDefaultCampaign: vi.fn().mockResolvedValue('campaign-001'),
@@ -82,7 +83,10 @@ vi.mock('../services/adGenerator.js', () => ({
   isSceneLockedAngle: (...args) => mockIsSceneLockedAngle(...args),
   selectInspirationImage: (...args) => mockSelectInspirationImage(...args),
   selectTemplateImage: (...args) => mockSelectTemplateImage(...args),
+  assertTemplateTagHasActiveTemplates: vi.fn(),
   reviewPromptWithGuidelines: (...args) => mockReviewPromptWithGuidelines(...args),
+  readImageBase64: vi.fn(),
+  cleanupImageData: vi.fn(),
 }));
 
 // Mock Gemini (image generation)
@@ -346,6 +350,91 @@ describe('batch pipeline', () => {
         provider: 'OpenAI',
         model: 'gpt-5.2',
       });
+    });
+
+    it('keeps Path-B valid non-literal-scene headlines moving through prompt generation', async () => {
+      const pathBAngleBrief = {
+        name: 'BOF - Discernment Before Commitment',
+        frame: 'objection-first',
+        core_buyer: 'A Christian adult comparing counseling paths before committing to training.',
+        symptom_pattern: 'They keep comparing licensure, ministry, and certificate options but do not want to be pushed into one program.',
+        objection: 'They worry a free webinar will become another enrollment pitch.',
+        scene: 'A person sitting at a kitchen table with a Bible nearby, a notepad of half-formed questions, and a laptop open to a counseling program page.',
+        desired_belief_shift: 'I can map options before committing.',
+      };
+      const headline = "Worried you'll be pushed to a program? Map options first.";
+
+      mockGetBatchJob.mockResolvedValue(makeBatchJob({
+        batch_size: 1,
+        angle_name: pathBAngleBrief.name,
+        angle_brief: JSON.stringify(pathBAngleBrief),
+      }));
+      mockGetProject.mockResolvedValue(makeProject());
+      mockGetLatestDoc.mockImplementation((projId, docType) =>
+        Promise.resolve(makeDoc(docType))
+      );
+      mockExtractBrief.mockResolvedValue('## AVATAR IN THIS MOMENT\nCareful Christian adults\n\n## EMOTIONAL ENTRY POINT\nSkeptical clarity\n\n## RELEVANT PAIN POINTS\nThey fear being pushed into one program.\n\n## RELEVANT QUOTES\n"Is this just a pitch?"\n\n## SPECIFICITY ANCHORS\nlicensure vs ministry vs certificate');
+      mockGenerateHeadlines.mockResolvedValue({
+        headlines: [{
+          rank: 1,
+          headline,
+          hook_lane: 'objection_reversal',
+          sub_angle: 'pressure-free map',
+          scene_anchor: 'comparing paths before committing',
+          core_claim: 'map options before pressure',
+          target_symptom: 'fear of being pushed into one program',
+          emotional_entry: 'skeptical caution',
+          desired_belief_shift: 'I can map options before committing.',
+          opening_pattern: 'objection_flip',
+          average_score: 9,
+        }],
+      });
+      mockGenerateBodyCopies.mockResolvedValue([{
+        headline,
+        body_copy: 'Compare the three paths before you spend money or years.',
+        hook_lane: 'objection_reversal',
+        sub_angle: 'pressure-free map',
+        scene_anchor: 'comparing paths before committing',
+        core_claim: 'map options before pressure',
+        target_symptom: 'fear of being pushed into one program',
+        emotional_entry: 'skeptical caution',
+        desired_belief_shift: 'I can map options before committing.',
+        opening_pattern: 'objection_flip',
+        primary_emotion: 'skepticism',
+      }]);
+      mockSelectInspirationImage.mockResolvedValue({
+        fileId: null,
+        tmpPath: null,
+        mimeType: 'image/jpeg',
+      });
+      mockGenerateImagePromptsBatch.mockResolvedValue([{
+        prompt: 'Render a calm decision-map ad.',
+        visual_copy_plan: { headline, supporting_text: 'Compare paths before committing.' },
+        rendered_text_expectation: 'template_matched',
+        visual_text_density: 'short',
+        template_text_contract: { text_density: 'short', rendered_text_expectation: 'template_matched', zones: [] },
+      }]);
+      mockGetClient.mockResolvedValue({
+        batches: {
+          create: vi.fn().mockResolvedValue({ name: 'batches/path-b-test' }),
+        },
+      });
+      mockUpdateBatchJob.mockResolvedValue();
+
+      const { runBatch } = await import('../services/batchProcessor.js');
+      await expect(runBatch('batch-001')).resolves.toBeUndefined();
+
+      const failedCalls = mockUpdateBatchJob.mock.calls.filter(([, fields]) => fields?.status === 'failed');
+      expect(failedCalls.map(([, fields]) => fields?.error_message || '').join('\n')).not.toContain('All');
+      expect(failedCalls.map(([, fields]) => fields?.error_message || '').join('\n')).not.toContain('filtered out');
+      expect(mockUpdateBatchJob).toHaveBeenCalledWith('batch-001', expect.objectContaining({
+        gpt_prompts: expect.stringContaining(headline),
+        status: 'submitting',
+      }));
+      expect(mockUpdateBatchJob).toHaveBeenCalledWith('batch-001', expect.objectContaining({
+        gemini_batch_job: 'batches/path-b-test',
+        status: 'processing',
+      }));
     });
   });
 

@@ -544,7 +544,7 @@ async function generateBatchPrompts(batch, project, docs, onProgress, options = 
     const regenInfo = regenCandidateCount > 0
       ? ` (regen produced ${regenCandidateCount} more, still 0 survived)`
       : '';
-    const full = `[Stage 1] All ${totalCandidates} headlines from Claude filtered out` + regenInfo +
+    const full = `[Stage 1] All ${totalCandidates} headlines from the LLM filtered out` + regenInfo +
       ` — ${sceneRejected} rejected by scene alignment (${sceneSurvived} survived), ` +
       `${dedupRejected} rejected by history/in-batch dedup. ` +
       `Check the angle's scene constraints or recent headline history.`;
