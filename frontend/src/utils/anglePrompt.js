@@ -122,13 +122,28 @@ USE:
 =============================
 HOW THIS WORKFLOW WORKS
 =============================
-Step 1: Output exactly 10 LIGHT TEASERS.
-Step 2: Stop and wait for the operator.
-Step 3: When the operator asks to expand selected numbers in natural language, return full markdown angle briefs for only those picks.
-Step 4: When the operator asks for "more", "10 more", "another batch", or similar, output 10 fresh teasers that avoid overlap with every teaser already shown, including both kept and discarded ideas.
-Step 5: Repeat until the operator stops.
+Step 1 — Generate the first batch:
+- Output exactly 10 LIGHT TEASERS.
+- After the list, write this brief CTA in plain prose: "Tell me which ones you'd like to keep on your shortlist (e.g., 'keep 1, 4, 7'), or ask for '10 more' to see a fresh batch. When you're ready to lock in your shortlist, say 'create the markdown' and I'll expand them into full angle briefs."
 
-Do not output full angle briefs until the operator asks to expand specific teasers.
+Step 2 — When the operator says "keep X, Y, Z" or any natural-language equivalent:
+- Add the named teasers to a running shortlist that you track across this conversation.
+- Confirm by echoing the names of what was just kept and the running total: "Added to shortlist: [names]. Shortlist total: N angles. Want 10 more candidates, or ready to expand your shortlist into the final markdown?"
+- Do NOT expand to full markdown yet.
+
+Step 3 — When the operator says "10 more", "another batch", or similar:
+- Output 10 fresh teasers, avoiding overlap with every prior teaser shown, including kept and discarded ideas.
+- End with this CTA: "Tell me which to keep, or ask for 10 more, or say 'create the markdown' to expand your shortlist."
+- If fresh ground is running thin, say so and offer to push into specific niche segments instead of generating watered-down candidates.
+
+Step 4 — When the operator says "create the markdown", "expand all", "I'm ready", or similar:
+- Take the running shortlist accumulated across all prior keep commands.
+- Expand every shortlisted angle into the full markdown using the exact format spec below.
+- Output one single markdown code block containing all expanded angles, separated by --- lines.
+
+Step 5 — Backwards compatibility:
+- If the operator says "expand 1, 4, 7" or similar specific-number expansion, treat this as a direct expansion ONLY for those specific numbers from the most recent teaser batch.
+- This is a fallback for users who want to expand a single batch directly without using the shortlist model.
 
 =============================
 LIGHT TEASER FORMAT
@@ -146,7 +161,7 @@ Rules for teasers:
 - The pattern must describe a recurring recognition pattern, not a one-off scene.
 - No full angle fields yet.
 - No markdown table.
-- No extra commentary after the list.
+- After the list, include only the brief CTA described in the workflow section.
 
 =============================
 WEAK VS BETTER LIGHT TEASERS
@@ -167,12 +182,17 @@ Better teaser:
 WHEN THE OPERATOR PICKS TEASERS
 =============================
 The operator may say things like:
+- "keep 1, 4, 7"
+- "shortlist the credential one and the helper one"
+- "keep 2 and show me 10 more"
+- "create the markdown"
+- "expand all"
 - "expand 1, 4, 7"
 - "do 2 and 9"
 - "expand the credential one and the helper one"
 - "make 3 full angles"
 
-Interpret natural language. Expand only the selected teasers. If a reference is ambiguous, ask one short clarification question.
+Interpret natural language. The default workflow is shortlist first, then expand only when the operator says "create the markdown", "expand all", "I'm ready", or similar. If the operator uses the backwards-compatible "expand 1, 4, 7" command, expand only those selected teasers from the most recent batch. If a reference is ambiguous, ask one short clarification question.
 
 =============================
 EXPANDED MARKDOWN FORMAT — COPY EXACTLY
@@ -239,7 +259,8 @@ If the operator asks for "more", "10 more", "another batch", "new ones", or simi
 - Avoid overlap with every prior teaser in this chat, including ideas the operator ignored or rejected.
 - Do not simply rename the same buyer pattern.
 - Push into genuinely different buyer states, objections, awareness levels, identity segments, or moments of hesitation.
+- End with: "Tell me which to keep, or ask for 10 more, or say 'create the markdown' to expand your shortlist."
 - If fresh ground is running thin, say: "Fresh ground is getting thin. I can keep going, but the next useful move is to push into one of these segments: <segment A>, <segment B>, <segment C>." Then offer the segment choices instead of generating watered-down candidates.
 
-Begin now with exactly 10 light teasers. No preamble.`;
+Begin now with exactly 10 light teasers, then end with a brief CTA telling me what to do next.`;
 }

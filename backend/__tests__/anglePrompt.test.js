@@ -25,16 +25,38 @@ describe('Copy LLM Prompt angle template', () => {
     expect(prompt).toContain('If a fragment shouldn\'t appear verbatim in a 5-word Facebook headline');
     expect(prompt).toContain('LIGHT TEASER FORMAT');
     expect(prompt).toContain('Return exactly 10 teasers');
+    expect(prompt).toContain("Tell me which ones you'd like to keep on your shortlist");
+    expect(prompt).toContain("'keep 1, 4, 7'");
+    expect(prompt).toContain("'create the markdown'");
+    expect(prompt).toContain('running shortlist');
+    expect(prompt).toContain('Added to shortlist: [names]. Shortlist total: N angles');
+    expect(prompt).toContain("Tell me which to keep, or ask for 10 more, or say 'create the markdown' to expand your shortlist.");
     expect(prompt).toContain('expand 1, 4, 7');
+    expect(prompt).toContain('backwards-compatible');
+    expect(prompt).toContain('direct expansion ONLY for those specific numbers from the most recent teaser batch');
     expect(prompt).toContain('10 fresh teasers');
-    expect(prompt).toContain('including both kept and discarded ideas');
+    expect(prompt).toContain('including kept and discarded ideas');
     expect(prompt).toContain('Fresh ground is getting thin');
+    expect(prompt).toContain('Begin now with exactly 10 light teasers, then end with a brief CTA telling me what to do next.');
     expect(prompt).toContain('[avatar]');
     expect(prompt).toContain('Register for a free clarity webinar');
 
     expect(prompt).not.toContain('the exact lived experience the ad centers on. Not a category');
     expect(prompt).not.toContain('the concrete physical scene the ad visually and narratively anchors to');
     expect(prompt).not.toContain('Return **8 distinct angles**');
+    expect(prompt).not.toContain('No preamble');
+
+    for (const section of [
+      'BRAND CONTEXT',
+      'COLD-SCROLL CONTEXT (READ BEFORE GENERATING)',
+      'WHAT AN ANGLE IS',
+      'AI RENDERING WARNING',
+      'LIGHT TEASER FORMAT',
+      'WEAK VS BETTER LIGHT TEASERS',
+      'EXPANDED MARKDOWN FORMAT — COPY EXACTLY',
+    ]) {
+      expect(prompt).toContain(section);
+    }
 
     for (const heading of [
       '### Core Buyer',

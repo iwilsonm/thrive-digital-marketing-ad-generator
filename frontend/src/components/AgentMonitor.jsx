@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { AuthContext } from '../App';
 import PipelineProgress from './PipelineProgress';
 import { useToast } from './Toast';
 import { ensureArray } from '../utils/collections';
@@ -50,6 +51,13 @@ function angleHasTag(angle, tag) {
   if (!normalized) return true;
   return Array.isArray(angle?.tags)
     && angle.tags.some(value => String(value || '').trim().toLowerCase() === normalized);
+}
+
+const REQUIRED_FOUNDATIONAL_DOC_TYPES = ['research', 'avatar', 'offer_brief', 'necessary_beliefs'];
+
+function hasCompleteFoundationalDocs(docs = []) {
+  const types = new Set(ensureArray(docs, 'AgentMonitor.director.foundationalDocs').map(doc => doc?.doc_type).filter(Boolean));
+  return REQUIRED_FOUNDATIONAL_DOC_TYPES.every(type => types.has(type));
 }
 
 function timeAgo(dateStr) {
@@ -1063,6 +1071,7 @@ const VALID_AGENT_TABS = ['director', 'filter'];
 
 export default function AgentMonitor({ projectId: externalProjectId, project: externalProject, onProjectRefresh }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useContext(AuthContext);
   const [filterData, setFilterData] = useState(null);
   const [pipelineStatus, setPipelineStatus] = useState(null);
   const embedded = !!externalProjectId;
@@ -1230,6 +1239,7 @@ export default function AgentMonitor({ projectId: externalProjectId, project: ex
             onRefresh={loadStatus}
             externalProjectId={externalProjectId}
             externalProject={externalProject}
+            userRole={user?.role}
             onProjectRefresh={onProjectRefresh}
           />
         )}
@@ -1336,7 +1346,114 @@ function PipelineOverview({ data, filterData }) {
 // =============================================
 // Creative Director Tab
 // =============================================
-function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectRefresh }) {
+function DirectorSetupTipsPanel({ projectId, foundationalDocsComplete, angleCount, directorEnabled, userRole }) {
+  const storageKey = `directorSetupTipsCollapsed:${projectId}`;
+  const canView = userRole === 'admin' || userRole === 'manager';
+  const state = !foundationalDocsComplete
+    ? 'docs'
+    : angleCount === 0
+      ? 'angles'
+      : directorEnabled
+        ? 'enabled'
+        : 'disabled';
+  const defaultCollapsed = state === 'enabled';
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
+  useEffect(() => {
+    if (!projectId) return;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      setCollapsed(saved === null ? defaultCollapsed : saved === 'true');
+    } catch {
+      setCollapsed(defaultCollapsed);
+    }
+  }, [defaultCollapsed, projectId, storageKey]);
+
+  const setManualCollapsed = (next) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(storageKey, next ? 'true' : 'false');
+    } catch { /* ignore */ }
+  };
+
+  if (!canView) return null;
+
+  const content = {
+    docs: {
+      summary: 'Complete foundational docs first.',
+      title: '⚠️ Complete your foundational docs first',
+      paragraphs: [
+        "The Creative Director needs your foundational research to generate good angles. Head to the Foundational Docs tab and complete the doc generation. Once those are done, you'll automatically get a default angle here, and you can generate more.",
+      ],
+    },
+    angles: {
+      summary: 'Docs are complete, but no active angles exist yet.',
+      title: "⚠️ You don't have any angles yet",
+      paragraphs: [
+        "Your project's foundational docs are complete. A default Direct Offer angle should appear automatically — if you don't see one yet, refresh the page. To add more positioning angles, use the workflow below.",
+        "Step 1: Click Copy LLM Prompt. Paste into ChatGPT or Claude. The LLM will walk you through generating 10 angle teasers, picking the ones you like, building a shortlist across batches, and expanding the final shortlist into full briefs.",
+        "Step 2: Paste the LLM's markdown into the Import dialog. Each angle in the markdown gets added to your library.",
+        'Step 3: Enable the Creative Director (toggle below) to start scheduled runs.',
+      ],
+    },
+    disabled: {
+      summary: `${angleCount} active angle${angleCount === 1 ? '' : 's'}. Director is disabled.`,
+      title: `✓ You have ${angleCount} angle${angleCount === 1 ? '' : 's'}. Enable the Director to start runs.`,
+      paragraphs: [
+        'Toggle Enable Creative Director below to start scheduled runs at 7am / 7pm / 1am ICT. Recommended: click Run Test on one angle first to verify the system works end-to-end before relying on schedule.',
+        'Want more angles? Click Copy LLM Prompt anytime to generate more candidates with ChatGPT or Claude, then Import the markdown back here. Any angle in your library is editable — click on it to customize.',
+      ],
+    },
+    enabled: {
+      summary: 'Director is enabled. Scheduled runs are active.',
+      title: '✓ Director is enabled. Scheduled runs at 7am / 7pm / 1am ICT.',
+      paragraphs: [
+        'Click Run Test on any angle to trigger an immediate batch — recommended after any angle changes. View results in the Staging tab. Need more angles? Use the Copy LLM Prompt workflow anytime.',
+      ],
+    },
+  }[state];
+
+  return (
+    <section className={`mb-4 rounded-xl border px-3 py-3 ${foundationalDocsComplete ? 'bg-ed-accent/5 border-ed-accent/10' : 'bg-ed-rust/5 border-ed-rust/10'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[12px] font-serif font-[420] text-ed-ink">Director Setup & Tips</h3>
+            {collapsed && (
+              <button
+                type="button"
+                onClick={() => setManualCollapsed(false)}
+                className="text-[10px] font-medium text-ed-accent hover:text-ed-accent/80"
+              >
+                Need help?
+              </button>
+            )}
+          </div>
+          {collapsed && <p className="text-[11px] text-ed-ink2 mt-1">{content.summary}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={() => setManualCollapsed(!collapsed)}
+          className="ed-ghost text-[10px] px-2 py-1 shrink-0"
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? 'Show' : 'Hide'}
+        </button>
+      </div>
+
+      {!collapsed && (
+        <div className="mt-3 space-y-2">
+          <p className={`text-[12px] font-medium ${foundationalDocsComplete ? 'text-ed-ink' : 'text-ed-rust'}`}>{content.title}</p>
+          {content.paragraphs.map((paragraph) => (
+            <p key={paragraph} className="text-[11px] text-ed-ink2 leading-relaxed">{paragraph}</p>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, onProjectRefresh }) {
   const toast = useToast();
   const embedded = !!externalProjectId;
   const [projects, setProjects] = useState([]);
@@ -1346,6 +1463,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   const [angleOptions, setAngleOptions] = useState([]);
   const [runs, setRuns] = useState([]);
   const [playbooks, setPlaybooks] = useState([]);
+  const [foundationalDocs, setFoundationalDocs] = useState([]);
   const [subTab, setSubTab] = useState('settings');
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [selectedAngleIds, setSelectedAngleIds] = useState([]);
@@ -1362,6 +1480,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   const [runsLoadedFor, setRunsLoadedFor] = useState('');
   const [playbooksLoadedFor, setPlaybooksLoadedFor] = useState('');
   const [campaignsLoadedFor, setCampaignsLoadedFor] = useState('');
+  const [foundationalDocsLoadedFor, setFoundationalDocsLoadedFor] = useState('');
   const [runningAction, setRunningAction] = useState(null);
   const [cancelingRunId, setCancelingRunId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1540,6 +1659,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
     setAngleOptions([]);
     setRuns([]);
     setPlaybooks([]);
+    setFoundationalDocs([]);
     setCampaigns([]);
     setTemplates([]);
     setAnglesLoadedFor('');
@@ -1548,14 +1668,20 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
     setPlaybooksLoadedFor('');
     setCampaignsLoadedFor('');
     setTemplatesLoadedFor('');
+    setFoundationalDocsLoadedFor('');
     setAdsPerAdSetDraft(null);
     (async () => {
       try {
-        const [cfgRes] = await Promise.allSettled([
+        const [cfgRes, docsRes] = await Promise.allSettled([
           api.getConductorConfig(selectedProject),
+          api.getDocs(selectedProject),
         ]);
         if (cancelled) return;
         if (cfgRes.status === 'fulfilled') setConfig(cfgRes.value?.config || null);
+        if (docsRes.status === 'fulfilled') {
+          setFoundationalDocs(ensureArray(docsRes.value?.docs, 'AgentMonitor.director.foundationalDocs'));
+          setFoundationalDocsLoadedFor(selectedProject);
+        }
       } catch { /* ignore */ }
       finally {
         if (!cancelled) setBaseLoading(false);
@@ -2552,6 +2678,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   const selectableAnglesForBulk = [...activeAngles, ...testingAngles];
   const selectedVisibleAngleCount = selectableAnglesForBulk.filter(angle => selectedAngleIds.includes(angle.externalId)).length;
   const allVisibleAnglesSelected = selectableAnglesForBulk.length > 0 && selectedVisibleAngleCount === selectableAnglesForBulk.length;
+  const foundationalDocsComplete = foundationalDocsLoadedFor === selectedProject && hasCompleteFoundationalDocs(foundationalDocs);
 
   useEffect(() => {
     if (!selectedAngleId) return;
@@ -2592,7 +2719,10 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
           >
             <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all duration-200 shadow-sm ${config?.enabled ? 'left-3.5 bg-ed-green' : 'left-0.5 bg-ed-ink3'}`} />
           </div>
-          Enabled
+          <span className="inline-flex items-center gap-1">
+            Enable Creative Director
+            <InfoTooltip text="When on, the Director runs automatically at 7am / 7pm / 1am ICT. Generated ads land in Staging for review." position="bottom" />
+          </span>
         </label>
 
         <div className="ml-auto grid grid-cols-1 sm:grid-cols-[minmax(180px,260px)_130px_minmax(160px,220px)_auto] items-end gap-2">
@@ -2658,15 +2788,18 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
             </select>
             <TemplateTagHelp projectId={selectedProject} hasTags={templateTags.length > 0} className="text-[9px]" />
           </div>
-          <button
-            data-testid="director-test-run-button"
-            onClick={handleTestRun}
-            disabled={!canTriggerTestRun}
-            className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors flex items-center gap-1 disabled:opacity-50"
-            title={!selectedAngleId ? 'Select a test angle first.' : `Create a test ad set with ${testAdSetTargetValue} approved ads.`}
-          >
-            {activeRun ? <><Spinner /> {queuedRuns.length > 0 ? `Running (${queuedRuns.length} queued)` : 'Running...'}</> : queuedRuns.length > 0 ? `Queue Run (${queuedRuns.length} queued)` : 'Test Run'}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              data-testid="director-test-run-button"
+              onClick={handleTestRun}
+              disabled={!canTriggerTestRun}
+              className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors flex items-center gap-1 disabled:opacity-50"
+              title={!selectedAngleId ? 'Select a test angle first.' : `Create a test ad set with ${testAdSetTargetValue} approved ads.`}
+            >
+              {activeRun ? <><Spinner /> {queuedRuns.length > 0 ? `Running (${queuedRuns.length} queued)` : 'Running...'}</> : queuedRuns.length > 0 ? `Queue Run (${queuedRuns.length} queued)` : 'Test Run'}
+            </button>
+            <InfoTooltip text="Trigger one immediate batch for this angle. Each test run uses LLM credits (a few dollars per batch). Results land in Staging within 5–15 minutes." position="bottom" />
+          </div>
         </div>
       </div>
 
@@ -2859,6 +2992,14 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
             </div>
           )}
 
+          <DirectorSetupTipsPanel
+            projectId={selectedProject}
+            foundationalDocsComplete={foundationalDocsComplete}
+            angleCount={activeAngles.length}
+            directorEnabled={!!config?.enabled}
+            userRole={userRole}
+          />
+
           {/* Focus mode banner */}
           {activeAngles.some(a => a.focused) && (
             <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-ed-accent/10 border border-ed-accent/20">
@@ -2913,26 +3054,31 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
               <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" /></svg>
               Export
             </button>
-            <button
-              onClick={() => { setShowImport(!showImport); setImportResult(null); }}
-              className={`ed-ghost text-[11px] px-3 py-1.5 flex items-center gap-1.5 ${showImport ? 'ring-1 ring-ed-accent/30' : ''}`}
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5m0 0L7 8m5-5v12" /></svg>
-              Import
-            </button>
-            <button
-              onClick={handleCopyAnglePrompt}
-              disabled={!selectedProject || copyingPrompt}
-              title="Copy a ready-made prompt that you can paste into ChatGPT or Claude to generate a list of angles in the exact import format."
-              className="ed-ghost text-[11px] px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40"
-            >
-              {copyingPrompt ? (
-                <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>
-              ) : (
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-              )}
-              {copyingPrompt ? 'Copying...' : 'Copy LLM Prompt'}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => { setShowImport(!showImport); setImportResult(null); }}
+                className={`ed-ghost text-[11px] px-3 py-1.5 flex items-center gap-1.5 ${showImport ? 'ring-1 ring-ed-accent/30' : ''}`}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5m0 0L7 8m5-5v12" /></svg>
+                Import
+              </button>
+              <InfoTooltip text="Paste the markdown your LLM generated. Each angle in the markdown will be added to your project library." position="bottom" />
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleCopyAnglePrompt}
+                disabled={!selectedProject || copyingPrompt}
+                className="ed-ghost text-[11px] px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-40"
+              >
+                {copyingPrompt ? (
+                  <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>
+                ) : (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                )}
+                {copyingPrompt ? 'Copying...' : 'Copy LLM Prompt'}
+              </button>
+              <InfoTooltip text="Copies a custom prompt to your clipboard. Paste it into any capable LLM (ChatGPT, Claude). The LLM walks you through generating angles and you import the result back here." position="bottom" />
+            </div>
           </div>
 
           {/* Import panel */}
