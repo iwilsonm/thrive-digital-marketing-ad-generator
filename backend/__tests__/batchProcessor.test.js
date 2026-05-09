@@ -318,6 +318,35 @@ describe('batch pipeline', () => {
       const failCall = failCalls[failCalls.length - 1];
       expect(failCall[1].error_message).toBeTruthy();
     });
+
+    it('preserves actionable billing errors on batch.error_message without Pipeline failed prefix', async () => {
+      const billingMessage = 'OpenAI account has zero usable quota for gpt-5.2. Top up billing at https://platform.openai.com/account/billing or rotate to a key with usable quota.';
+      const billingError = new Error(billingMessage);
+      billingError.code = 'BILLING_EXHAUSTED';
+      billingError.provider = 'OpenAI';
+      billingError.model = 'gpt-5.2';
+
+      mockGetBatchJob.mockResolvedValue(makeBatchJob());
+      mockGetProject.mockResolvedValue(makeProject());
+      mockGetLatestDoc.mockResolvedValue(makeDoc('research'));
+      mockExtractBrief.mockRejectedValue(billingError);
+      mockUpdateBatchJob.mockResolvedValue();
+
+      const { runBatch } = await import('../services/batchProcessor.js');
+      await expect(runBatch('batch-001')).rejects.toThrow(billingMessage);
+
+      const failCalls = mockUpdateBatchJob.mock.calls.filter(
+        c => c[1]?.status === 'failed'
+      );
+      const failCall = failCalls[failCalls.length - 1];
+      expect(failCall[1].error_message).toBe(billingMessage);
+      expect(failCall[1].error_message).not.toContain('Pipeline failed:');
+      expect(JSON.parse(failCall[1].pipeline_state)).toMatchObject({
+        error_code: 'BILLING_EXHAUSTED',
+        provider: 'OpenAI',
+        model: 'gpt-5.2',
+      });
+    });
   });
 
   // ── pollBatchJob ─────────────────────────────────────────

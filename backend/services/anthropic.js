@@ -15,7 +15,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { getSetting } from '../convexClient.js';
-import { withRetry } from './retry.js';
+import { defaultShouldRetry, withRetry } from './retry.js';
 import { logAnthropicCost } from './costTracker.js';
 
 let client = null;
@@ -82,7 +82,7 @@ function isModelNotFoundError(err) {
   return false;
 }
 
-const ANTHROPIC_BILLING_MESSAGE = 'Anthropic request blocked — your account shows insufficient credit balance or a billing issue. Check your plan and credits at https://console.anthropic.com/settings/billing.';
+const ANTHROPIC_BILLING_URL = 'https://console.anthropic.com/settings/billing';
 const ANTHROPIC_RATE_LIMIT_MESSAGE = 'Anthropic rate limit reached. Please wait a moment and try again.';
 
 function collectProviderErrorMessages(value, seen = new Set()) {
@@ -115,10 +115,25 @@ function getProviderErrorText(err) {
 }
 
 function isAnthropicBillingError(err, providerErrorText = getProviderErrorText(err)) {
+  const code = err?.code || err?.error?.code;
+  const type = err?.error?.type || err?.type;
   const text = providerErrorText.toLowerCase();
-  return text.includes('credit balance is too low')
+  return code === 'credit_balance_too_low'
+    || code === 'billing_error'
+    || code === 'payment_required'
+    || code === 'organization_disabled'
+    || code === 'account_suspended'
+    || type === 'credit_balance_too_low'
+    || type === 'billing_error'
+    || type === 'payment_required'
+    || text.includes('credit balance is too low')
+    || text.includes('purchase credits')
+    || text.includes('upgrade or purchase credits')
     || text.includes('billing')
-    || text.includes('organization has been disabled');
+    || text.includes('organization has been disabled')
+    || text.includes('organization disabled')
+    || text.includes('account suspended')
+    || text.includes('organization suspended');
 }
 
 function isAnthropicRateLimitError(err, providerErrorText = getProviderErrorText(err)) {
@@ -131,11 +146,32 @@ function isAnthropicRateLimitError(err, providerErrorText = getProviderErrorText
 }
 
 function toAnthropicUserFacingError(err) {
+  if (isAnthropicBillingError(err)) return buildAnthropicBillingError(err?.model || 'this model');
   const providerErrorText = getProviderErrorText(err);
   if (!isAnthropicRateLimitError(err, providerErrorText)) return err;
-  return new Error(isAnthropicBillingError(err, providerErrorText)
-    ? ANTHROPIC_BILLING_MESSAGE
-    : ANTHROPIC_RATE_LIMIT_MESSAGE);
+  return new Error(ANTHROPIC_RATE_LIMIT_MESSAGE);
+}
+
+function buildAnthropicBillingError(model) {
+  const err = new Error(`Anthropic account has zero usable quota for ${model}. Top up billing at ${ANTHROPIC_BILLING_URL} or rotate to a key with usable quota.`);
+  err.code = 'BILLING_EXHAUSTED';
+  err.provider = 'Anthropic';
+  err.model = model;
+  return err;
+}
+
+function shouldRetryAnthropic(err, model) {
+  if (isAnthropicBillingError(err)) {
+    console.warn(`[Anthropic Billing] Account quota exhausted, failing fast — model: ${model}`);
+    err.model = model;
+    return false;
+  }
+  return defaultShouldRetry(err);
+}
+
+function toAnthropicUserFacingErrorForModel(err, model) {
+  if (isAnthropicBillingError(err)) return buildAnthropicBillingError(model);
+  return toAnthropicUserFacingError(err);
 }
 
 const ANTHROPIC_FALLBACK_CHAIN = {
@@ -230,7 +266,11 @@ export async function chat(messages, model = 'claude-sonnet-4-6', options = {}) 
         );
         return Promise.race([apiCall, timeoutPromise]);
       },
-      { label: `[Anthropic chat ${activeModel}]`, maxRetries: options.maxRetries ?? 3 }
+      {
+        label: `[Anthropic chat ${activeModel}]`,
+        maxRetries: options.maxRetries ?? 3,
+        shouldRetry: (err) => shouldRetryAnthropic(err, activeModel),
+      }
     );
   };
 
@@ -257,10 +297,10 @@ export async function chat(messages, model = 'claude-sonnet-4-6', options = {}) 
       try {
         response = await callWithModel(activeModel);
       } catch (fallbackErr) {
-        throw toAnthropicUserFacingError(fallbackErr);
+        throw toAnthropicUserFacingErrorForModel(fallbackErr, activeModel);
       }
     } else {
-      throw toAnthropicUserFacingError(err);
+      throw toAnthropicUserFacingErrorForModel(err, activeModel);
     }
   }
 
@@ -350,7 +390,7 @@ export async function chatWithImage(messages, text, base64Image, mimeType, model
   try {
     const response = await withRetry(
       () => anthropic.messages.create(createParams),
-      { label: '[Anthropic chatWithImage]' }
+      { label: '[Anthropic chatWithImage]', shouldRetry: (err) => shouldRetryAnthropic(err, model) }
     );
 
     // Log cost from token usage (fire-and-forget)
@@ -361,7 +401,7 @@ export async function chatWithImage(messages, text, base64Image, mimeType, model
       .map(block => block.text)
       .join('');
   } catch (err) {
-    throw toAnthropicUserFacingError(err);
+    throw toAnthropicUserFacingErrorForModel(err, model);
   }
 }
 
@@ -454,7 +494,11 @@ export async function chatWithMultipleImages(messages, text, images, model = 'cl
         );
         return Promise.race([apiCall, timeoutPromise]);
       },
-      { label: '[Anthropic chatWithMultipleImages]', maxRetries: options.maxRetries ?? 3 }
+      {
+        label: '[Anthropic chatWithMultipleImages]',
+        maxRetries: options.maxRetries ?? 3,
+        shouldRetry: (err) => shouldRetryAnthropic(err, model),
+      }
     );
 
     // Log cost from token usage (fire-and-forget)
@@ -475,6 +519,6 @@ export async function chatWithMultipleImages(messages, text, images, model = 'cl
 
     return responseText;
   } catch (err) {
-    throw toAnthropicUserFacingError(err);
+    throw toAnthropicUserFacingErrorForModel(err, model);
   }
 }

@@ -118,6 +118,10 @@ function isStale(batch, staleMs, now = Date.now()) {
   return !Number.isFinite(ts) || now - ts > staleMs;
 }
 
+function isBillingExhaustedMessage(message) {
+  return /BILLING_EXHAUSTED|account has zero usable quota|Top up billing|insufficient_quota|credit balance is too low|enable billing|set up billing/i.test(String(message || ''));
+}
+
 async function runClaimedBatch(batchId, source, owner) {
   if (runningBatchIds.has(batchId)) return { started: false, reason: 'already_running' };
   runningBatchIds.add(batchId);
@@ -176,6 +180,21 @@ async function handleClaimedActiveBatch(batch, owner) {
   if (['generating_prompts', 'submitting'].includes(batch.status) && !batch.gemini_batch_job) {
     if (isStale(batch, PRE_GEMINI_STALE_MS, now)) {
       const detectedAt = new Date().toISOString();
+      if (isBillingExhaustedMessage(batch.error_message)) {
+        await updateBatchJob(batch.id, {
+          status: 'failed',
+          error_message: batch.error_message,
+          stale_detected_at: detectedAt,
+          last_heartbeat_at: detectedAt,
+          pipeline_state: JSON.stringify({
+            stage: 'billing_exhausted_pre_gemini',
+            failed_at: detectedAt,
+            previous_status: batch.status,
+            last_heartbeat_at: batch.last_heartbeat_at || null,
+          }),
+        });
+        return 'failed';
+      }
       const retryCount = batch.retry_count || 0;
       if (retryCount < PRE_GEMINI_RETRY_LIMIT) {
         await updateBatchJob(batch.id, {

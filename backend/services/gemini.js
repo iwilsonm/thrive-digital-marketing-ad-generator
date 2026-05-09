@@ -9,6 +9,7 @@ let lastApiKey = null;
 const GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS = 180 * 1000;
 const GEMINI_IMAGE_MAX_ATTEMPTS = 2;
 const NO_IMAGE_MESSAGE = "Gemini returned a response without an image. This usually means the prompt was refused or hit a content filter. Check the ad's diagnostic detail for finish reason and safety ratings, or try a different prompt.";
+const GEMINI_BILLING_URL = 'https://aistudio.google.com/app/billing';
 
 async function getClient() {
   const apiKey = await getSetting('gemini_api_key');
@@ -39,6 +40,7 @@ function classifyGeminiError(err, timedOut = false) {
   if (err?.code === 'GEMINI_CANCELLED' || err?.geminiErrorClass === 'cancelled') return 'cancelled';
   if (timedOut || err?.code === 'GEMINI_ATTEMPT_TIMEOUT' || err?.name === 'AbortError') return 'timeout';
   if (err?.code === 'GEMINI_NO_IMAGE_RETURNED' || err?.geminiErrorClass === 'no_image_returned') return 'no_image_returned';
+  if (isGeminiBillingError(err, providerText)) return 'billing_exhausted';
   if (status === 503 || /UNAVAILABLE|high demand|experiencing/i.test(`${message} ${providerText}`)) return 'provider_unavailable';
   if (status === 429 || err?.code === 'RESOURCE_EXHAUSTED' || /RESOURCE_EXHAUSTED|rate.?limit|quota/i.test(message)) return 'rate_limit';
   if (status >= 400) return 'api_error';
@@ -84,6 +86,16 @@ function isGeminiZeroQuotaError(providerErrorText) {
   return /"?limit"?\s*[:=]\s*"?0"?/i.test(providerErrorText) || /free[_-]?tier/i.test(providerErrorText);
 }
 
+function isGeminiBillingError(err, providerErrorText = getProviderErrorText(err)) {
+  const status = err?.status || err?.statusCode || err?.httpCode;
+  const code = err?.code || err?.error?.code || err?.error?.status;
+  const text = `${providerErrorText} ${err?.message || ''}`.toLowerCase();
+  return (status === 400 && code === 'FAILED_PRECONDITION' && /free tier|enable billing|setup a paid plan|set up billing/i.test(text))
+    || /failed_precondition/i.test(text) && /free tier|enable billing|setup a paid plan|set up billing/i.test(text)
+    || /billing disabled|billing account closed|billing account inactive|prepay credit balance|credit balance hits \$?0|all api keys.*stop working|zero quota/i.test(text)
+    || isGeminiZeroQuotaError(providerErrorText);
+}
+
 function isGeminiResourceExhaustedError(err, providerErrorText) {
   const status = err?.status || err?.statusCode || err?.httpCode;
   return status === 429 || err?.code === 'RESOURCE_EXHAUSTED' || /RESOURCE_EXHAUSTED/i.test(providerErrorText);
@@ -99,6 +111,14 @@ function buildCancelledError() {
   const err = new Error('Cancelled by user');
   err.code = 'GEMINI_CANCELLED';
   err.geminiErrorClass = 'cancelled';
+  return err;
+}
+
+function buildGeminiBillingError(model) {
+  const err = new Error(`Gemini account has zero usable quota for ${model}. Top up billing at ${GEMINI_BILLING_URL} or rotate to a key with usable quota.`);
+  err.code = 'BILLING_EXHAUSTED';
+  err.provider = 'Gemini';
+  err.model = model;
   return err;
 }
 
@@ -267,9 +287,15 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
     // Custom retry predicate to handle this, plus standard network/server errors.
     const shouldRetryGemini = (err) => {
       const status = err.status || err.statusCode || err.httpCode;
+      if (isGeminiBillingError(err)) {
+        console.warn(`[Gemini Billing] Account quota exhausted, failing fast — model: ${modelId}`);
+        err.model = modelId;
+        return false;
+      }
       if (err.geminiErrorClass === 'timeout') return true;
       if (err.geminiErrorClass === 'provider_unavailable') return true;
       if (err.geminiErrorClass === 'no_image_returned') return true;
+      if (err.geminiErrorClass === 'billing_exhausted') return false;
       // Retry 400 from Gemini (transient INVALID_ARGUMENT errors)
       if (status === 400 && err.message?.includes('INVALID_ARGUMENT')) return true;
       // Retry 429 (rate limit) and 5xx (server errors)
@@ -366,12 +392,15 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
     if (err.geminiErrorClass === 'cancelled' || err.code === 'GEMINI_CANCELLED') {
       throw attachImageAttempts(buildCancelledError(), imageAttempts);
     }
+    if (err.geminiErrorClass === 'billing_exhausted' || isGeminiBillingError(err, providerErrorText)) {
+      throw attachImageAttempts(buildGeminiBillingError(modelId), imageAttempts);
+    }
     if (err.message?.includes('INVALID_ARGUMENT')) {
       throw attachImageAttempts(new Error('Image generation temporarily unavailable (Gemini API capacity issue). Please try again in a moment.'), imageAttempts);
     }
     if (isGeminiResourceExhaustedError(err, providerErrorText)) {
       if (isGeminiZeroQuotaError(providerErrorText)) {
-        throw attachImageAttempts(new Error("Gemini image generation requires a paid Google AI Studio tier — your current API key's project shows zero quota for this model. Enable billing at https://aistudio.google.com or switch the image model in Settings."), imageAttempts);
+        throw attachImageAttempts(buildGeminiBillingError(modelId), imageAttempts);
       }
       throw attachImageAttempts(new Error('Image generation rate limit reached. Please wait a moment and try again.'), imageAttempts);
     }

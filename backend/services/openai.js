@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { getSetting } from '../convexClient.js';
-import { withRetry } from './retry.js';
+import { defaultShouldRetry, withRetry } from './retry.js';
 import { logOpenAICost } from './costTracker.js';
 
 let client = null;
@@ -53,7 +53,7 @@ export async function chatStream(messages, onChunk, model = 'gpt-4.1', options =
         model, messages, stream: true,
         stream_options: { include_usage: true },
       }, signal ? { signal } : undefined),
-      { label: '[OpenAI chatStream]' }
+      { label: '[OpenAI chatStream]', shouldRetry: (err) => shouldRetryOpenAI(err, model) }
     );
 
     let fullResponse = '';
@@ -80,7 +80,7 @@ export async function chatStream(messages, onChunk, model = 'gpt-4.1', options =
 
     return fullResponse;
   } catch (err) {
-    throw toOpenAIUserFacingError(err);
+    throw toOpenAIUserFacingErrorForModel(err, model);
   }
 }
 
@@ -99,7 +99,7 @@ function isModelNotFoundError(err) {
   return false;
 }
 
-const OPENAI_BILLING_MESSAGE = 'OpenAI request blocked — your account shows zero usable quota for this model. Add billing details or check usage limits at https://platform.openai.com/account/billing.';
+const OPENAI_BILLING_URL = 'https://platform.openai.com/account/billing';
 const OPENAI_RATE_LIMIT_MESSAGE = 'OpenAI rate limit reached. Please wait a moment and try again.';
 
 function collectProviderErrorMessages(value, seen = new Set()) {
@@ -140,7 +140,10 @@ function isOpenAIBillingError(err, providerErrorText = getProviderErrorText(err)
     || code === 'insufficient_quota'
     || text.includes('insufficient_quota')
     || text.includes('billing_hard_limit_reached')
-    || text.includes('billing');
+    || text.includes('billing')
+    || text.includes('maximum monthly spend')
+    || text.includes('hard limit')
+    || text.includes('exceeded your current quota');
 }
 
 function isOpenAIRateLimitError(err, providerErrorText = getProviderErrorText(err)) {
@@ -156,13 +159,34 @@ function isOpenAIRateLimitError(err, providerErrorText = getProviderErrorText(er
 }
 
 function toOpenAIUserFacingError(err) {
+  if (isOpenAIBillingError(err)) return buildOpenAIBillingError(err?.model || 'this model');
   const providerErrorText = getProviderErrorText(err);
   if (!isOpenAIRateLimitError(err, providerErrorText)) return err;
-  const mapped = new Error(isOpenAIBillingError(err, providerErrorText)
-    ? OPENAI_BILLING_MESSAGE
-    : OPENAI_RATE_LIMIT_MESSAGE);
+  const mapped = new Error(OPENAI_RATE_LIMIT_MESSAGE);
   if (err?.imageAttempts) mapped.imageAttempts = err.imageAttempts;
   return mapped;
+}
+
+function buildOpenAIBillingError(model) {
+  const err = new Error(`OpenAI account has zero usable quota for ${model}. Top up billing at ${OPENAI_BILLING_URL} or rotate to a key with usable quota.`);
+  err.code = 'BILLING_EXHAUSTED';
+  err.provider = 'OpenAI';
+  err.model = model;
+  return err;
+}
+
+function shouldRetryOpenAI(err, model) {
+  if (isOpenAIBillingError(err)) {
+    console.warn(`[OpenAI Billing] Account quota exhausted, failing fast — model: ${model}`);
+    err.model = model;
+    return false;
+  }
+  return defaultShouldRetry(err);
+}
+
+function toOpenAIUserFacingErrorForModel(err, model) {
+  if (isOpenAIBillingError(err)) return buildOpenAIBillingError(model);
+  return toOpenAIUserFacingError(err);
 }
 
 const OPENAI_FALLBACK_CHAIN = {
@@ -199,7 +223,7 @@ export async function chat(messages, model = 'gpt-4.1', options = {}) {
   try {
     const response = await withRetry(
       () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }, requestOptions),
-      { label: `[OpenAI chat ${activeModel}]` }
+      { label: `[OpenAI chat ${activeModel}]`, shouldRetry: (err) => shouldRetryOpenAI(err, activeModel) }
     );
     logCostFromResponse(response, activeModel, { operation, projectId });
     return response.choices[0].message.content;
@@ -222,15 +246,15 @@ export async function chat(messages, model = 'gpt-4.1', options = {}) {
       try {
         const response = await withRetry(
           () => openai.chat.completions.create({ model: activeModel, messages, ...apiOptions }, requestOptions),
-          { label: `[OpenAI chat ${activeModel}]` }
+          { label: `[OpenAI chat ${activeModel}]`, shouldRetry: (err) => shouldRetryOpenAI(err, activeModel) }
         );
         logCostFromResponse(response, activeModel, { operation, projectId });
         return response.choices[0].message.content;
       } catch (fallbackErr) {
-        throw toOpenAIUserFacingError(fallbackErr);
+        throw toOpenAIUserFacingErrorForModel(fallbackErr, activeModel);
       }
     }
-    throw toOpenAIUserFacingError(err);
+    throw toOpenAIUserFacingErrorForModel(err, activeModel);
   }
 }
 
@@ -253,12 +277,12 @@ export async function chatWithImage(messages, text, base64Image, mimeType, model
   try {
     const response = await withRetry(
       () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }, requestOptions),
-      { label: '[OpenAI chatWithImage]' }
+      { label: '[OpenAI chatWithImage]', shouldRetry: (err) => shouldRetryOpenAI(err, model) }
     );
     logCostFromResponse(response, model, { operation, projectId });
     return response.choices[0].message.content;
   } catch (err) {
-    throw toOpenAIUserFacingError(err);
+    throw toOpenAIUserFacingErrorForModel(err, model);
   }
 }
 
@@ -286,11 +310,11 @@ export async function chatWithImages(messages, text, images, model = 'gpt-4.1', 
   try {
     const response = await withRetry(
       () => openai.chat.completions.create({ model, messages: [...messages, newMessage], ...apiOptions }, requestOptions),
-      { label: '[OpenAI chatWithImages]' }
+      { label: '[OpenAI chatWithImages]', shouldRetry: (err) => shouldRetryOpenAI(err, model) }
     );
     logCostFromResponse(response, model, { operation, projectId });
     return response.choices[0].message.content;
   } catch (err) {
-    throw toOpenAIUserFacingError(err);
+    throw toOpenAIUserFacingErrorForModel(err, model);
   }
 }

@@ -101,6 +101,34 @@ describe('batch scheduler', () => {
     expect(mockPollBatchJob).not.toHaveBeenCalled();
   });
 
+  it('preserves billing error messages through the stale pre-Gemini check', async () => {
+    const billingMessage = 'OpenAI account has zero usable quota for gpt-5.2. Top up billing at https://platform.openai.com/account/billing or rotate to a key with usable quota.';
+    const stale = batch({
+      status: 'generating_prompts',
+      gemini_batch_job: null,
+      last_heartbeat_at: '2000-01-01T00:00:00.000Z',
+      retry_count: 0,
+      error_message: billingMessage,
+    });
+    mockGetActiveBatchJobs.mockResolvedValue([stale]);
+    mockClaimBatchWork.mockResolvedValue({ claimed: true, batch: stale });
+
+    const { runSchedulerOnce } = await import('../services/scheduler.js');
+    await runSchedulerOnce({ source: 'test', owner: 'test-owner' });
+
+    expect(mockUpdateBatchJob).toHaveBeenCalledWith('batch-001', expect.objectContaining({
+      status: 'failed',
+      error_message: billingMessage,
+      stale_detected_at: expect.any(String),
+    }));
+    const update = mockUpdateBatchJob.mock.calls.find(([id]) => id === 'batch-001')?.[1];
+    expect(update.error_message).not.toBe('Batch stalled before Gemini submission. No image job was created, so it is safe to retry.');
+    expect(JSON.parse(update.pipeline_state)).toMatchObject({
+      stage: 'billing_exhausted_pre_gemini',
+    });
+    expect(mockPollBatchJob).not.toHaveBeenCalled();
+  });
+
   it('polls processing batches through Gemini when a job exists', async () => {
     const active = batch({ status: 'processing', gemini_batch_job: 'batches/test' });
     mockGetActiveBatchJobs.mockResolvedValue([active]);

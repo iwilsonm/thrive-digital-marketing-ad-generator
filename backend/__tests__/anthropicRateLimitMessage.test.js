@@ -1,9 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   messagesCreate: vi.fn(),
   getSetting: vi.fn(),
   logAnthropicCost: vi.fn(),
+  withRetry: vi.fn(async (fn, options = {}) => {
+    try {
+      return await fn();
+    } catch (err) {
+      if (typeof options.shouldRetry === 'function') options.shouldRetry(err);
+      throw err;
+    }
+  }),
 }));
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -21,7 +29,11 @@ vi.mock('../convexClient.js', () => ({
 }));
 
 vi.mock('../services/retry.js', () => ({
-  withRetry: vi.fn((fn) => fn()),
+  withRetry: mocks.withRetry,
+  defaultShouldRetry: vi.fn((err) => {
+    const status = err.status || err.statusCode || err.httpCode;
+    return status === 429 || status >= 500;
+  }),
 }));
 
 vi.mock('../services/costTracker.js', () => ({
@@ -35,6 +47,11 @@ describe('Anthropic rate limit user-facing messages', () => {
     vi.clearAllMocks();
     mocks.getSetting.mockResolvedValue('sk-ant-test');
     mocks.logAnthropicCost.mockResolvedValue(undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('reports billing/account action when Anthropic returns a low-credit error', async () => {
@@ -46,9 +63,14 @@ describe('Anthropic rate limit user-facing messages', () => {
     };
     mocks.messagesCreate.mockRejectedValueOnce(err);
 
-    await expect(chat([{ role: 'user', content: 'hi' }], 'claude-sonnet-4-6', { maxRetries: 0 })).rejects.toThrow(
-      'Anthropic request blocked — your account shows insufficient credit balance or a billing issue. Check your plan and credits at https://console.anthropic.com/settings/billing.'
-    );
+    await expect(chat([{ role: 'user', content: 'hi' }], 'claude-sonnet-4-6', { maxRetries: 0 })).rejects.toMatchObject({
+      code: 'BILLING_EXHAUSTED',
+      provider: 'Anthropic',
+      model: 'claude-sonnet-4-6',
+      message: 'Anthropic account has zero usable quota for claude-sonnet-4-6. Top up billing at https://console.anthropic.com/settings/billing or rotate to a key with usable quota.',
+    });
+    expect(mocks.messagesCreate).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith('[Anthropic Billing] Account quota exhausted, failing fast — model: claude-sonnet-4-6');
   });
 
   it('keeps the wait-and-retry message for transient Anthropic rate limits', async () => {

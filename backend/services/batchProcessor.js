@@ -351,7 +351,8 @@ export async function runBatch(batchId, onProgress, options = {}) {
     console.log(`[BatchProcessor] Batch ${batchId.slice(0, 8)} submitted. Gemini job: ${geminiBatchName}`);
 
   } catch (err) {
-    const errorMsg = `Pipeline failed: ${err.message}`;
+    const isBillingExhausted = err?.code === 'BILLING_EXHAUSTED';
+    const errorMsg = isBillingExhausted ? err.message : `Pipeline failed: ${err.message}`;
     emit({ type: 'error', error: errorMsg });
     console.error(`[BatchProcessor] Batch ${batchId.slice(0, 8)} pipeline failed:`, err.message);
     console.error(`[BatchProcessor] Stack:`, err.stack?.split('\n').slice(0, 3).join('\n'));
@@ -362,6 +363,9 @@ export async function runBatch(batchId, onProgress, options = {}) {
       error_message: err.message,
       error_status: err.status ?? err.statusCode ?? null,
       error_type: err.error?.type ?? err.type ?? null,
+      error_code: err.code ?? null,
+      provider: err.provider ?? null,
+      model: err.model ?? null,
     };
     // Mark batch as failed — retry the status update in case Convex is also having issues
     for (let attempt = 0; attempt < 3; attempt++) {

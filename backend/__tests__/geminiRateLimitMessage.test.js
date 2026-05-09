@@ -58,6 +58,7 @@ describe('Gemini image rate limit user-facing messages', () => {
     mocks.getSetting.mockResolvedValue('gemini-api-key');
     mocks.logGeminiCost.mockResolvedValue(undefined);
     vi.spyOn(Math, 'random').mockReturnValue(0);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -71,11 +72,23 @@ describe('Gemini image rate limit user-facing messages', () => {
     err.error = {
       message: 'Quota exceeded for metric GenerateImagesRequestsPerMinutePerProjectPerModel-FreeTier with limit: 0',
     };
+    mocks.generateContent.mockRejectedValue(err);
 
-    await expectGeminiFailureMessage(
-      err,
-      "Gemini image generation requires a paid Google AI Studio tier — your current API key's project shows zero quota for this model. Enable billing at https://aistudio.google.com or switch the image model in Settings."
-    );
+    await expect(generateImage('prompt', '1:1', null, {
+      projectId: 'project-1',
+      imageModel: 'nano-banana-2',
+      operation: 'ad_image_generation',
+    })).rejects.toMatchObject({
+      code: 'BILLING_EXHAUSTED',
+      provider: 'Gemini',
+      model: 'gemini-3.1-flash-image-preview',
+      message: 'Gemini account has zero usable quota for gemini-3.1-flash-image-preview. Top up billing at https://aistudio.google.com/app/billing or rotate to a key with usable quota.',
+      imageAttempts: [
+        expect.objectContaining({ attempt_number: 1, error_class: 'billing_exhausted', queue_depth_at_start: 2 }),
+      ],
+    });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith('[Gemini Billing] Account quota exhausted, failing fast — model: gemini-3.1-flash-image-preview');
   });
 
   it('keeps the wait-and-retry message for transient Gemini 429s with non-zero quota', async () => {
