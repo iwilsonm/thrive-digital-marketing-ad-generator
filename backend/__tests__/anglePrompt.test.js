@@ -3,12 +3,17 @@ import { buildAnglePromptText } from '../../frontend/src/utils/anglePrompt.js';
 import { parseAnglesMarkdown } from '../utils/angleParser.js';
 
 describe('Copy LLM Prompt angle template', () => {
-  it('renders cold-scroll-aware angle instructions while preserving import headings', () => {
+  it('renders curated teaser-first workflow instructions while preserving import headings', () => {
     const prompt = buildAnglePromptText({
       brand: 'TOV',
       productName: 'Christian Counsellor Webinar',
       niche: 'Christian counselling education',
       productDesc: 'A free webinar helping Christians compare counselling paths before training.',
+      salesPageContent: 'Register for a free clarity webinar about Christian counselling paths.',
+      foundationalDocs: [
+        { doc_type: 'avatar', content: 'Christians who feel called to help but are unsure whether to sign up for training.' },
+        { doc_type: 'offer_brief', content: 'The next step is a free webinar registration.' },
+      ],
     });
 
     expect(prompt).toContain('COLD-SCROLL CONTEXT (READ BEFORE GENERATING)');
@@ -18,10 +23,18 @@ describe('Copy LLM Prompt angle template', () => {
     expect(prompt).toContain('the emotional truth and recurring lived experience the ad anchors to');
     expect(prompt).toContain('AI RENDERING WARNING');
     expect(prompt).toContain('If a fragment shouldn\'t appear verbatim in a 5-word Facebook headline');
-    expect(prompt).toContain('BEFORE / AFTER REFERENCE');
+    expect(prompt).toContain('LIGHT TEASER FORMAT');
+    expect(prompt).toContain('Return exactly 10 teasers');
+    expect(prompt).toContain('expand 1, 4, 7');
+    expect(prompt).toContain('10 fresh teasers');
+    expect(prompt).toContain('including both kept and discarded ideas');
+    expect(prompt).toContain('Fresh ground is getting thin');
+    expect(prompt).toContain('[avatar]');
+    expect(prompt).toContain('Register for a free clarity webinar');
 
     expect(prompt).not.toContain('the exact lived experience the ad centers on. Not a category');
     expect(prompt).not.toContain('the concrete physical scene the ad visually and narratively anchors to');
+    expect(prompt).not.toContain('Return **8 distinct angles**');
 
     for (const heading of [
       '### Core Buyer',
@@ -39,8 +52,9 @@ describe('Copy LLM Prompt angle template', () => {
     }
   });
 
-  it('keeps the markdown contract compatible with the existing structured angle parser', () => {
-    const markdown = `## Called To Help Cold Traffic
+  it('keeps fenced expanded markdown compatible with the existing structured angle parser', () => {
+    const markdown = `\`\`\`markdown
+## Called To Help Cold Traffic
 
 - **Status**: active
 - **Priority**: highest
@@ -76,7 +90,8 @@ Calm, plainspoken, faithful, pressure-free.
 ### Avoid
 No timestamps. No kitchen-table tabs. No urgency hype.
 
----`;
+---
+\`\`\``;
 
     const [angle] = parseAnglesMarkdown(markdown);
 

@@ -2469,6 +2469,34 @@ export async function createConductorAngle({ id, project_id, name, description, 
   invalidateQueryCache('conductor');
 }
 
+export async function seedDefaultBofAngle({ id, project_id, name, description, prompt_hints, status,
+  priority, frame, core_buyer, symptom_pattern, failed_solutions, current_belief,
+  objection, emotional_state, scene, desired_belief_shift, tone, avoid_list, tags }) {
+  const result = await mutationWithRetry(api.conductor.seedDefaultBofAngle, {
+    externalId: id,
+    project_id,
+    name,
+    description,
+    prompt_hints: prompt_hints || undefined,
+    status: status || 'active',
+    priority: priority || 'medium',
+    frame: frame || undefined,
+    core_buyer: core_buyer || undefined,
+    symptom_pattern: symptom_pattern || undefined,
+    failed_solutions: failed_solutions || undefined,
+    current_belief: current_belief || undefined,
+    objection: objection || undefined,
+    emotional_state: emotional_state || undefined,
+    scene: scene || undefined,
+    desired_belief_shift: desired_belief_shift || undefined,
+    tone: tone || undefined,
+    avoid_list: avoid_list || undefined,
+    tags: Array.isArray(tags) ? tags : undefined,
+  });
+  invalidateQueryCache('conductor');
+  return result;
+}
+
 export async function updateConductorAngle(id, fields) {
   await mutationWithRetry(api.conductor.updateAngle, { externalId: id, ...fields });
   invalidateQueryCache('conductor');

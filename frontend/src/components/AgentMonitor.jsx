@@ -2294,8 +2294,17 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
       const productName = project?.name || '';
       const niche = project?.niche || '(not specified)';
       const productDesc = project?.product_description || '(not specified)';
+      const docsData = await api.getDocs(selectedProject);
+      const foundationalDocs = ensureArray(docsData?.docs, 'AgentMonitor.copyAnglePrompt.docs');
 
-      const promptText = buildAnglePromptText({ brand, productName, niche, productDesc });
+      const promptText = buildAnglePromptText({
+        brand,
+        productName,
+        niche,
+        productDesc,
+        salesPageContent: project?.sales_page_content || '',
+        foundationalDocs,
+      });
       await navigator.clipboard.writeText(promptText);
       toast.success('Prompt copied. Paste it into ChatGPT/Claude, then save the reply as a .md file and import it here.');
     } catch (err) {
@@ -2358,6 +2367,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, onProjectR
   };
 
   const parseAnglesMarkdown = (text) => {
+    text = String(text || '').trim().replace(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/i, '$1').trim();
     // Split by --- separators (new format) or ## headings (old format)
     const hasStructuredSections = text.includes('### Core Buyer') || text.includes('### Symptom Pattern');
 
@@ -3643,7 +3653,7 @@ function AngleCard({ angle, playbooks, onStatusChange, onUpdate, showActions, se
           )}
           <span className={`text-[11px] text-ed-ink3 flex-shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}>&#9656;</span>
           <span className="text-[13px] font-medium text-ed-ink">{angle.name}</span>
-          {angle.is_system_default && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent">System</span>}
+          {angle.is_system_default && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent">Default BOF</span>}
           {angle.priority && <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${PRIORITY_COLORS[angle.priority] || 'bg-ed-bg text-gray-600'}`}>{angle.priority}</span>}
           {angle.frame && <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${FRAME_COLORS[angle.frame] || 'bg-ed-bg text-gray-600'}`}>{angle.frame}</span>}
           {angleTags.map(tag => (

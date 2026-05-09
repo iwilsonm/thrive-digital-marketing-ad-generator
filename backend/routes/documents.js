@@ -14,6 +14,7 @@ import {
 } from '../services/docGenerator.js';
 import { getHistory, logManualEdit, applyCorrections, revertCorrection } from '../services/correctionHistory.js';
 import { streamService } from '../utils/sseHelper.js';
+import { seedDefaultBofAngleForProject } from '../services/bofSeeder.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -31,6 +32,14 @@ async function checkAndPromoteDocStatus(projectId) {
     // Promote status from setup to docs_ready
     if (project.status === 'setup' && allDocsExist) {
       await updateProject(projectId, { status: 'docs_ready' });
+    }
+
+    if (allDocsExist) {
+      try {
+        await seedDefaultBofAngleForProject(project, docs);
+      } catch (seedErr) {
+        console.error('[Docs] Default BOF seed error:', seedErr.message);
+      }
     }
   } catch (err) {
     console.error('[Docs] Status check error:', err.message);

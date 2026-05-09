@@ -20,6 +20,12 @@ const SECTION_MAP = {
 const VALID_PRIORITIES = ['highest', 'high', 'medium', 'test'];
 const VALID_FRAMES = ['symptom-first', 'scam', 'objection-first', 'identity-first', 'MAHA', 'news-first', 'consequence-first'];
 
+export function stripOuterMarkdownFence(markdown) {
+  const text = String(markdown || '').trim();
+  const match = text.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/i);
+  return match ? match[1].trim() : String(markdown || '');
+}
+
 // Reverse map: description label → database field key
 const DESCRIPTION_LABEL_MAP = {
   'core buyer': 'core_buyer',
@@ -145,6 +151,7 @@ export function buildAngleBriefJSON(angle) {
  * @returns {Array<object>} Array of parsed angle objects ready for DB insertion
  */
 export function parseAnglesMarkdown(markdown) {
+  markdown = stripOuterMarkdownFence(markdown);
   const angles = [];
 
   // Split by --- separators (horizontal rules)

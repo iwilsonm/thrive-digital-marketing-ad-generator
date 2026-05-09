@@ -12,7 +12,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
   getConductorConfig, upsertConductorConfig,
-  getActiveConductorAngles, updateConductorAngle, getSystemDefaultAngle, createConductorAngle,
+  getActiveConductorAngles, updateConductorAngle,
   getConductorPlaybook,
   createConductorRun as createConductorRunRaw, updateConductorRun as updateConductorRunRaw, getConductorRuns,
   enqueueConductorTestRun, claimQueuedConductorTestRun, releaseQueuedConductorTestRun, cancelQueuedConductorTestRun,
@@ -799,59 +799,7 @@ async function replaceFailedSlot(projectId, config, postingDay, slot, allSlots) 
  * Returns an array of angle objects, one per batch needed.
  */
 
-const BOF_ANGLE = {
-  name: 'BOF (Bottom of Funnel)',
-  description: `Core Buyer: Warm prospects who already know the product — visited the site, seen ads, comparing options, almost ready to buy.
-Symptom Pattern: Hesitation at the point of purchase — needs one more push: a better deal, stronger proof, or final reassurance.
-Objection: Price concerns, skepticism about results, uncertainty about whether this is the right product for them.
-Scene: Scrolling Facebook or Instagram feed, pauses on a clean product-focused ad with a star rating and a limited-time offer.
-Desired Belief Shift: This product is proven, trustworthy, easy to buy, and worth buying now.`,
-  core_buyer: 'Warm prospects who already know the product — visited the site, seen ads, comparing options, almost ready to buy',
-  symptom_pattern: 'Hesitation at the point of purchase — needs one more push: a better deal, stronger proof, or final reassurance',
-  objection: 'Price concerns, skepticism about results, uncertainty about whether this is the right product for them',
-  scene: 'Scrolling Facebook or Instagram feed, pauses on a clean product-focused ad with a star rating and a limited-time offer',
-  desired_belief_shift: 'This product is proven, trustworthy, easy to buy, and worth buying now',
-  tone: 'Direct, confident, conversion-focused — like a high-performing static Facebook ad',
-  avoid_list: 'Awareness-stage messaging, abstract artistic imagery, lifestyle mood images, overcrowded layouts, generic posters, long educational content',
-  frame: 'bottom-of-funnel',
-  prompt_hints: `IMAGE DIRECTION — Conversion-focused ecommerce ad to close the sale:
-
-1. PRODUCT VISUAL: Show the actual product clearly and prominently as the main focus. Use a clean, polished product shot or show it in use realistically. Not abstract or overly artistic.
-
-2. HEADLINE: Short, direct headline that removes hesitation or gives a reason to buy now. Examples: "Sleep Better Tonight", "Try It Risk-Free for 90 Days", "Still Struggling With [PROBLEM]?", "Why Thousands Switched to [PRODUCT]"
-
-3. PROOF ELEMENT: Include at least one: star rating (e.g. 4.8 stars), customer count (10,000+ happy customers), short customer quote, review snippet, or before/after result. Keep it short and scannable.
-
-4. TRUST/OFFER ELEMENT: Include at least one: 90-day guarantee, free shipping, easy returns, limited-time discount, bundle savings, or doctor recommended. Make the product feel safe and worth buying now.
-
-5. CTA: Simple call to action: "Shop Now", "Get Yours Today", "Claim Your Discount", "Try It Risk-Free"
-
-DESIGN: Clean layout, easy to scan in 1-2 seconds. Product visually dominant. Text short and bold. Important elements obvious at a glance. Do NOT overcrowd. Should feel like a mini sales page compressed into one static ad. Make it look like a real high-converting static Facebook or Instagram ad.`,
-};
-
-async function ensureBofAngle(projectId) {
-  try {
-    const existing = await getSystemDefaultAngle(projectId);
-    if (existing) return;
-    await createConductorAngle({
-      id: uuidv4(),
-      project_id: projectId,
-      ...BOF_ANGLE,
-      source: 'system',
-      status: 'active',
-      priority: 'medium',
-      is_system_default: true,
-    });
-    console.log(`[Director] Created BOF angle for project ${projectId}`);
-  } catch (err) {
-    console.error(`[Director] Failed to create BOF angle: ${err.message}`);
-  }
-}
-
 async function selectAngles(projectId, config, count, excludedAngleNames = []) {
-  // Ensure BOF (Bottom of Funnel) system angle exists
-  await ensureBofAngle(projectId);
-
   const activeAngles = await getActiveConductorAngles(projectId);
   const filtered = filterAnglesByConfiguredTag(activeAngles, config);
   const selectableAngles = filtered.angles;

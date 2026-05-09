@@ -243,6 +243,60 @@ export const createAngle = mutation({
   },
 });
 
+export const seedDefaultBofAngle = mutation({
+  args: {
+    externalId: v.string(),
+    project_id: v.string(),
+    name: v.string(),
+    description: v.string(),
+    prompt_hints: v.optional(v.string()),
+    status: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    frame: v.optional(v.string()),
+    core_buyer: v.optional(v.string()),
+    symptom_pattern: v.optional(v.string()),
+    failed_solutions: v.optional(v.string()),
+    current_belief: v.optional(v.string()),
+    objection: v.optional(v.string()),
+    emotional_state: v.optional(v.string()),
+    scene: v.optional(v.string()),
+    desired_belief_shift: v.optional(v.string()),
+    tone: v.optional(v.string()),
+    avoid_list: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("conductor_angles")
+      .withIndex("by_project", (q) => q.eq("project_id", args.project_id))
+      .collect();
+
+    const defaultBof = existing.find((angle) => angle.source === "default_bof");
+    if (defaultBof) {
+      return { created: false, reason: "default_bof_exists", externalId: defaultBof.externalId };
+    }
+
+    const namedBof = existing.find((angle) => /^BOF\b/i.test(angle.name || ""));
+    if (namedBof) {
+      return { created: false, reason: "bof_name_exists", externalId: namedBof.externalId };
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("conductor_angles", {
+      ...args,
+      source: "default_bof",
+      status: args.status || "active",
+      priority: args.priority || "medium",
+      is_system_default: true,
+      times_used: 0,
+      created_at: now,
+      updated_at: now,
+    });
+
+    return { created: true, reason: "created", externalId: args.externalId };
+  },
+});
+
 export const updateAngle = mutation({
   args: {
     externalId: v.string(),

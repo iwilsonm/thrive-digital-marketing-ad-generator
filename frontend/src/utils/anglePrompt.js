@@ -1,34 +1,39 @@
+function compactContext(value, maxLength = 6000) {
+  return String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function buildFoundationalDocsBlock(foundationalDocs = []) {
+  if (!Array.isArray(foundationalDocs) || foundationalDocs.length === 0) return '';
+  return foundationalDocs
+    .map((doc) => {
+      const type = doc?.doc_type || doc?.type || 'document';
+      const content = compactContext(doc?.content || '', 3500);
+      if (!content) return null;
+      return `[${type}]\n${content}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
 /**
- * Builds a self-contained LLM prompt that, when pasted into ChatGPT/Claude, asks the
- * model to return a markdown file matching the exact format the "Import Angles" flow
- * parses. The produced markdown can be saved as .md and dropped into the Import panel.
- *
- * Output format reference: angle import expects:
- *   ## <Angle Name>
- *   - **Status**: active
- *   - **Priority**: highest|high|medium|test
- *   - **Frame**: symptom-first|scam|objection-first|identity-first|MAHA|news-first|consequence-first
- *   ### Core Buyer
- *   ### Symptom Pattern
- *   ### Failed Solutions
- *   ### Current Belief
- *   ### Objection
- *   ### Emotional State
- *   ### Scene to Center the Ad On
- *   ### Desired Belief Shift
- *   ### Tone
- *   ### Avoid
- *   ---
- *   (next angle...)
+ * Builds a self-contained iterative LLM prompt for the "Copy LLM Prompt" flow.
+ * The first response is teaser-only; expanded replies preserve the exact markdown
+ * contract parsed by the Import Angles flow.
  */
-export function buildAnglePromptText({ brand, productName, niche, productDesc }) {
+export function buildAnglePromptText({ brand, productName, niche, productDesc, salesPageContent = '', foundationalDocs = [] }) {
   const productLine = productName && brand && productName !== brand
     ? `${brand} — ${productName}`
     : brand;
+  const salesPageBlock = compactContext(salesPageContent, 5000);
+  const docsBlock = buildFoundationalDocsBlock(foundationalDocs);
 
-  return `You are a world-class direct-response copywriter brainstorming Facebook ad angles for the brand below.
+  return `You are a world-class direct-response strategist brainstorming Facebook ad angles for the brand below.
 
-Return **8 distinct angles** as a single markdown document, formatted *exactly* as specified at the bottom of this message. The markdown will be imported verbatim into an ad-generation system; any deviation from the format will cause angles to be silently dropped.
+This is an iterative curation workflow. Do NOT dump full angle briefs first. First generate light teasers only. The operator will pick which teasers to expand, and you will then return full markdown only for those picks.
 
 =============================
 BRAND CONTEXT
@@ -36,6 +41,10 @@ BRAND CONTEXT
 Brand: ${productLine}
 Niche / market: ${niche}
 Product description: ${productDesc}
+Sales page / offer context: ${salesPageBlock || '(not provided)'}
+
+Foundational docs:
+${docsBlock || '(not provided)'}
 
 =============================
 COLD-SCROLL CONTEXT (READ BEFORE GENERATING)
@@ -111,33 +120,64 @@ USE:
 - Universal recognition signals ("Christians who feel called to help," "people the church turns to")
 
 =============================
-RULES FOR THE ANGLE SET
+HOW THIS WORKFLOW WORKS
 =============================
-- 8 angles total. No fewer.
-- Every angle must use a different **Frame** if possible. If you repeat a Frame, the Core Buyer or Symptom Pattern must be meaningfully different.
-- No two angles may share the same Symptom Pattern or the same Scene.
-- At least one angle each at priority "highest" and "high". Up to two "test".
-- Write in plain, specific English. No marketing-ese. No hype. No em-dashes as hedges.
-- Every angle should contain at least one cold-scroll audience signal that a stranger could recognize without knowing the brand first.
-- If a field would be empty, put a concrete guess — never "N/A" or "(none)".
+Step 1: Output exactly 10 LIGHT TEASERS.
+Step 2: Stop and wait for the operator.
+Step 3: When the operator asks to expand selected numbers in natural language, return full markdown angle briefs for only those picks.
+Step 4: When the operator asks for "more", "10 more", "another batch", or similar, output 10 fresh teasers that avoid overlap with every teaser already shown, including both kept and discarded ideas.
+Step 5: Repeat until the operator stops.
+
+Do not output full angle briefs until the operator asks to expand specific teasers.
 
 =============================
-BEFORE / AFTER REFERENCE
+LIGHT TEASER FORMAT
 =============================
-Weak angle field:
-Scene to Center the Ad On: "At 10:38 PM, she sits at the kitchen table with three browser tabs open, comparing ministry certificates and licensure pages."
+Return exactly 10 teasers in this format:
 
-Why it fails: the AI may turn this into a headline about "10:38 PM" or "three tabs," which only makes sense to someone already deep in research.
+1. <Angle Name> — <one-line recurring buyer pattern>
+2. <Angle Name> — <one-line recurring buyer pattern>
+...
+10. <Angle Name> — <one-line recurring buyer pattern>
 
-Better angle field:
-Scene to Center the Ad On: "Feels called to help, but keeps running into conflicting paths and doesn't know which one is credible, wise, or realistic."
-
-Why it works: the emotional truth is clear enough for cold scroll and does not require the AI to translate specific props.
+Rules for teasers:
+- The name should be 4-10 words.
+- The pattern should be one sentence.
+- The pattern must describe a recurring recognition pattern, not a one-off scene.
+- No full angle fields yet.
+- No markdown table.
+- No extra commentary after the list.
 
 =============================
-OUTPUT FORMAT — COPY EXACTLY
+WEAK VS BETTER LIGHT TEASERS
 =============================
-Return the full document as a single markdown code block. For each angle, use this exact structure. Separate angles with a line containing only three dashes on its own line.
+Weak teaser:
+"The 10:38 PM Kitchen Table" — She compares three tabs at the kitchen table late at night.
+
+Better teaser:
+"The Credential Confusion Loop" — She keeps circling training options that sound credible but never make the next step feel clear.
+
+Weak teaser:
+"Enroll Now Before It Is Too Late" — They need urgency to sign up immediately.
+
+Better teaser:
+"Before You Commit To The Wrong Path" — They feel close to acting but still need reassurance that this next step fits their calling, time, and trust.
+
+=============================
+WHEN THE OPERATOR PICKS TEASERS
+=============================
+The operator may say things like:
+- "expand 1, 4, 7"
+- "do 2 and 9"
+- "expand the credential one and the helper one"
+- "make 3 full angles"
+
+Interpret natural language. Expand only the selected teasers. If a reference is ambiguous, ask one short clarification question.
+
+=============================
+EXPANDED MARKDOWN FORMAT — COPY EXACTLY
+=============================
+When expanding selected teasers, return the full document as a single markdown code block. For each selected angle, use this exact structure. Separate angles with a line containing only three dashes on its own line.
 
 \`\`\`markdown
 ## <Angle Name>
@@ -183,5 +223,23 @@ Return the full document as a single markdown code block. For each angle, use th
 ... (same 10 sections, then another \`---\`)
 \`\`\`
 
-Produce the document now. No preamble, no commentary — just the markdown.`;
+Expanded-field rules:
+- Status is always active.
+- Use only valid priorities and frames from the placeholders above.
+- Keep the exact section headers.
+- Do not add Source, Focused, Prompt Hints, notes, tables, or commentary.
+- Symptom Pattern and Scene must remain cold-scroll-readable recurring patterns.
+- If the operator expands multiple teasers, produce only those selected angles.
+
+=============================
+WHEN THE OPERATOR ASKS FOR MORE
+=============================
+If the operator asks for "more", "10 more", "another batch", "new ones", or similar:
+- Output exactly 10 new light teasers.
+- Avoid overlap with every prior teaser in this chat, including ideas the operator ignored or rejected.
+- Do not simply rename the same buyer pattern.
+- Push into genuinely different buyer states, objections, awareness levels, identity segments, or moments of hesitation.
+- If fresh ground is running thin, say: "Fresh ground is getting thin. I can keep going, but the next useful move is to push into one of these segments: <segment A>, <segment B>, <segment C>." Then offer the segment choices instead of generating watered-down candidates.
+
+Begin now with exactly 10 light teasers. No preamble.`;
 }
