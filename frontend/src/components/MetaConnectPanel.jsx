@@ -3,6 +3,9 @@ import { api } from '../api';
 import { useToast } from './Toast';
 import InfoTooltip from './InfoTooltip';
 
+const META_OAUTH_REDIRECT_URI = 'https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback';
+const META_APP_DOMAIN_HOSTNAME = new URL(META_OAUTH_REDIRECT_URI).host;
+
 // Phase 2A — Per-project Meta OAuth + ad-account picker + integration path toggle.
 // Lives as the "Meta" sub-tab inside Project Settings. No data is shown until the
 // user clicks "Connect Meta Account" and completes the OAuth dance in a popup.
@@ -438,15 +441,45 @@ export default function MetaConnectPanel({ projectId }) {
         <div>
           <div className="rounded-xl border border-ed-line bg-ed-bg/60 p-4 mb-4">
             <h3 className="text-[13px] font-semibold text-ed-ink mb-2">Meta setup checklist</h3>
-            <ol className="list-decimal pl-4 space-y-1.5 text-[12px] text-ed-ink2 leading-relaxed">
-              <li>In global Settings, save the Meta App ID and App Secret from the Meta developer app.</li>
-              <li>In Meta's OAuth settings, add this exact redirect URI: <code className="bg-cream px-1 rounded">https://thrive-digital-marketing-ad-generat.vercel.app/api/meta/oauth/callback</code>.</li>
+            <ol className="list-decimal pl-4 space-y-3 text-[12px] text-ed-ink2 leading-relaxed">
+              <li>
+                In your Thrive Campaigns global Settings, save the Meta App ID and App Secret. You'll find both in your Meta Developer Portal under the app's Settings → Basic.
+              </li>
+              <li>
+                <p>
+                  In your Meta app, you must configure TWO separate fields. They are different fields, in different sections, and they expect DIFFERENT formats. Both are required.
+                </p>
+                <div className="mt-2 space-y-2">
+                  <div>
+                    <p className="font-semibold text-ed-ink">Field 1 — App Domains</p>
+                    <p>Meta Developer Portal → Settings → Basic → App Domains</p>
+                    <p>
+                      Expects a hostname only — no <code className="bg-cream px-1 rounded">https://</code>, no path, no slashes:
+                    </p>
+                    <code className="inline-block bg-cream px-1.5 py-0.5 rounded mt-1">{META_APP_DOMAIN_HOSTNAME}</code>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-ed-ink">Field 2 — Valid OAuth Redirect URIs</p>
+                    <p>Meta Developer Portal → Facebook Login → Settings → Valid OAuth Redirect URIs</p>
+                    <p>Expects the full URL, including protocol and path:</p>
+                    <code className="inline-block bg-cream px-1.5 py-0.5 rounded mt-1 break-all">{META_OAUTH_REDIRECT_URI}</code>
+                  </div>
+                </div>
+                <p className="mt-2">If you only configure one of these two fields, Meta will reject the OAuth flow.</p>
+              </li>
               <li>Make sure the Meta user connecting here has access to the ad account and at least one Facebook Page.</li>
               <li>Click Connect, approve the requested ads and Page-list permissions, then select this project's ad account and Page.</li>
             </ol>
-            <p className="text-[11px] text-ed-ink3 mt-3 leading-relaxed">
-              Common setup errors usually mean the App ID/Secret are missing, the redirect URI does not match exactly, the Meta user cannot access an ad account/Page, or the token expired and needs reconnecting.
-            </p>
+            <div className="text-[11px] text-ed-ink3 mt-3 leading-relaxed">
+              <p className="font-semibold text-ed-ink2">Common setup errors:</p>
+              <ul className="list-disc pl-4 mt-1 space-y-1">
+                <li><span className="font-medium text-ed-ink2">App Domains rejected the URL:</span> App Domains expects the hostname only (no <code className="bg-cream px-1 rounded">https://</code>, no <code className="bg-cream px-1 rounded">/api/...</code>). The full URL goes in the Valid OAuth Redirect URIs field, not App Domains. Both fields need to be populated separately.</li>
+                <li><span className="font-medium text-ed-ink2">Meta says redirect URI does not match:</span> the Valid OAuth Redirect URIs value must match exactly — no trailing slash, no port, exact protocol (https).</li>
+                <li><span className="font-medium text-ed-ink2">App ID or Secret are missing:</span> confirm both are saved in global Settings.</li>
+                <li><span className="font-medium text-ed-ink2">Meta user cannot access an ad account:</span> the connecting user must have access to at least one ad account and one Facebook Page.</li>
+                <li><span className="font-medium text-ed-ink2">Token expired and needs reconnecting:</span> tokens expire after ~60 days. Reconnect when prompted.</li>
+              </ul>
+            </div>
           </div>
           <button
             type="button"
