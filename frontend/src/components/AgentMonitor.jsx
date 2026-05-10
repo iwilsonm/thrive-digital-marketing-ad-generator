@@ -1346,15 +1346,15 @@ function PipelineOverview({ data, filterData }) {
 // =============================================
 // Creative Director Tab
 // =============================================
-function DirectorSetupTipsPanel({ projectId, foundationalDocsComplete, angleCount, directorEnabled, userRole }) {
+function DirectorSetupTipsPanel({ projectId, foundationalDocsComplete, angleCount, customAngleCount, directorEnabled, userRole }) {
   const storageKey = `directorSetupTipsCollapsed:${projectId}`;
   const canView = userRole === 'admin' || userRole === 'manager';
   const state = !foundationalDocsComplete
     ? 'docs'
-    : angleCount === 0
-      ? 'angles'
-      : directorEnabled
-        ? 'enabled'
+    : directorEnabled
+      ? 'enabled'
+      : customAngleCount === 0
+        ? 'angles'
         : 'disabled';
   const defaultCollapsed = state === 'enabled';
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -1387,11 +1387,11 @@ function DirectorSetupTipsPanel({ projectId, foundationalDocsComplete, angleCoun
       ],
     },
     angles: {
-      summary: 'Docs are complete, but no active angles exist yet.',
-      title: "⚠️ You don't have any angles yet",
+      summary: 'Direct Offer ready. No custom angles yet.',
+      title: '⚠️ Your project has Direct Offer. Add custom angles for richer testing.',
       paragraphs: [
-        "Your project's foundational docs are complete. A default Direct Offer angle should appear automatically — if you don't see one yet, refresh the page. To add more positioning angles, use the workflow below.",
-        "Step 1: Click Copy LLM Prompt. Paste into ChatGPT or Claude. The LLM will walk you through generating 10 angle teasers, picking the ones you like, building a shortlist across batches, and expanding the final shortlist into full briefs.",
+        'Your project\'s foundational docs are complete and a default Direct Offer angle is ready — that\'s the baseline "just sell the offer" positioning. You CAN run the Director on just Direct Offer, but adding custom angles lets you test multiple positioning narratives, which makes the system meaningfully more useful.',
+        'Step 1: Click Copy LLM Prompt. Paste into ChatGPT or Claude. The LLM will walk you through generating 10 angle teasers, picking the ones you like, building a shortlist across batches, and expanding the final shortlist into full briefs.',
         "Step 2: Paste the LLM's markdown into the Import dialog. Each angle in the markdown gets added to your library.",
         'Step 3: Enable the Creative Director (toggle below) to start scheduled runs.',
       ],
@@ -1450,6 +1450,27 @@ function DirectorSetupTipsPanel({ projectId, foundationalDocsComplete, angleCoun
         </div>
       )}
     </section>
+  );
+}
+
+function DirectorSettingsAnglesCallout({ customAngleCount, countsReady, userRole, onGoToAngles }) {
+  const canView = userRole === 'admin' || userRole === 'manager';
+  if (!canView || !countsReady || customAngleCount > 0) return null;
+
+  return (
+    <div className="rounded-xl bg-ed-accent/5 border border-ed-accent/10 px-3 py-3">
+      <p className="text-[12px] font-medium text-ed-ink">⚠️ Add custom angles before configuring Director settings</p>
+      <p className="text-[11px] text-ed-ink2 mt-1 leading-relaxed">
+        Your project's Director can run on just the Direct Offer baseline, but adding custom angles makes test variety meaningful. Head to the Angles tab to generate some — you'll see step-by-step instructions there.
+      </p>
+      <button
+        type="button"
+        onClick={onGoToAngles}
+        className="mt-3 px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors"
+      >
+        Go to Angles
+      </button>
+    </div>
   );
 }
 
@@ -2666,6 +2687,14 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
   ];
 
   const pinSystemFirst = (list) => list.sort((a, b) => (b.is_system_default ? 1 : 0) - (a.is_system_default ? 1 : 0));
+  const angleCountsReady = anglesLoadedFor === selectedProject || angleOptionsLoadedFor === selectedProject;
+  const activeAngleCountSource = anglesLoadedFor === selectedProject
+    ? safeAngles.filter(a => a.status === 'active')
+    : angleOptionsLoadedFor === selectedProject
+      ? safeAngleOptions
+      : [];
+  const angleCount = activeAngleCountSource.length;
+  const customAngleCount = activeAngleCountSource.filter(angle => angle.is_system_default !== true).length;
   const activeAngles = subTab === 'angles' || anglesLoadedFor === selectedProject
     ? pinSystemFirst(safeAngles.filter(a => a.status === 'active'))
     : [];
@@ -2995,7 +3024,8 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
           <DirectorSetupTipsPanel
             projectId={selectedProject}
             foundationalDocsComplete={foundationalDocsComplete}
-            angleCount={activeAngles.length}
+            angleCount={angleCount}
+            customAngleCount={customAngleCount}
             directorEnabled={!!config?.enabled}
             userRole={userRole}
           />
@@ -3271,6 +3301,13 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
 
       {subTab === 'settings' && config && (
         <div className="space-y-4">
+          <DirectorSettingsAnglesCallout
+            customAngleCount={customAngleCount}
+            countsReady={angleCountsReady}
+            userRole={userRole}
+            onGoToAngles={() => setSubTab('angles')}
+          />
+
           <div className="rounded-xl bg-ed-accent/5 border border-ed-accent/10 px-3 py-3">
             <p className="text-[12px] font-medium text-ed-ink">How the Director builds ad sets</p>
             <p className="text-[11px] text-ed-ink2 mt-1 leading-relaxed">
