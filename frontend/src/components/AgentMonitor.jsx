@@ -60,6 +60,10 @@ function hasCompleteFoundationalDocs(docs = []) {
   return REQUIRED_FOUNDATIONAL_DOC_TYPES.every(type => types.has(type));
 }
 
+function normalizeAngleNameForMatch(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
 function timeAgo(dateStr) {
   if (!dateStr) return 'never';
   const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -1474,6 +1478,102 @@ function DirectorSettingsAnglesCallout({ customAngleCount, countsReady, userRole
   );
 }
 
+function ImportDedupDialog({ open, result, importing, onImportNewOnly, onImportWithArchived, onCancel }) {
+  if (!open || !result) return null;
+
+  const newCount = result.newAngles?.length || 0;
+  const archivedMatches = ensureArray(result.archivedMatches, 'AgentMonitor.importDedup.archivedMatches');
+  const activeMatches = ensureArray(result.activeMatches, 'AgentMonitor.importDedup.activeMatches');
+  const archivedNames = archivedMatches.map(match => match.existingAngle?.name || match.angle?.name).filter(Boolean);
+  const activeNames = activeMatches.map(match => match.existingAngle?.name || match.angle?.name).filter(Boolean);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 fade-in">
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={() => !importing && onCancel?.()} />
+      <div className="relative bg-ed-surface border border-ed-line rounded-xl shadow-card w-full max-w-lg p-6">
+        <h3 className="font-serif text-[16px] font-[420] text-ed-ink tracking-tight">Some angles already exist in your library</h3>
+        <div className="text-[13px] text-ed-ink2 mt-3 space-y-2">
+          <p>{newCount} new angle{newCount !== 1 ? 's' : ''} will be added.</p>
+          {archivedNames.length > 0 && (
+            <p>{archivedNames.length} angle{archivedNames.length !== 1 ? 's' : ''} match archived entries: {archivedNames.join(', ')}</p>
+          )}
+          {activeNames.length > 0 && (
+            <p>{activeNames.length} angle{activeNames.length !== 1 ? 's' : ''} match active entries: {activeNames.join(', ')}</p>
+          )}
+          {activeNames.length > 0 && (
+            <p className="text-[12px] text-ed-ink3">
+              {activeNames.length} angle{activeNames.length !== 1 ? 's' : ''} already exist as active in your library — they will be skipped in any of the actions above. To replace their content, archive them first and re-import.
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 mt-6">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={importing}
+            className="ed-ghost text-[13px] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          {archivedNames.length > 0 && (
+            <button
+              type="button"
+              onClick={onImportWithArchived}
+              disabled={importing}
+              className="px-4 py-2 rounded-[7px] text-[13px] font-medium bg-ed-accent hover:bg-ed-accent/90 text-white transition-colors disabled:opacity-50"
+            >
+              {importing ? 'Working...' : `Import new + reactivate archived (${newCount + archivedNames.length})`}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onImportNewOnly}
+            disabled={importing}
+            className="px-4 py-2 rounded-[7px] text-[13px] font-medium bg-ed-accent hover:bg-ed-accent/90 text-white transition-colors disabled:opacity-50"
+          >
+            {importing ? 'Working...' : `Import new only (${newCount})`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DefaultAngleArchiveDialog({ open, angle, busy, onConfirm, onCancel }) {
+  if (!open || !angle) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 fade-in">
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={() => !busy && onCancel?.()} />
+      <div className="relative bg-ed-surface border border-ed-line rounded-xl shadow-card w-full max-w-md p-6">
+        <h3 className="font-serif text-[16px] font-[420] text-ed-ink tracking-tight">Archive your project's default angle?</h3>
+        <div className="text-[13px] text-ed-ink2 mt-3 space-y-3">
+          <p>"{angle.name}" is your project's default angle (auto-seeded after foundational docs complete). It serves as the baseline "just sell the offer" positioning. Archiving it means this project will only run on custom angles you've created.</p>
+          <p>If you archive it, you can always restore it from the archived list.</p>
+        </div>
+        <div className="flex items-center justify-end gap-2 mt-6">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="ed-ghost text-[13px] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="px-4 py-2 rounded-[7px] text-[13px] font-medium bg-ed-rust hover:bg-ed-rust/90 text-white transition-colors disabled:opacity-50"
+          >
+            {busy ? 'Archiving...' : 'Archive default angle'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, onProjectRefresh }) {
   const toast = useToast();
   const embedded = !!externalProjectId;
@@ -1606,7 +1706,10 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
   const [showImport, setShowImport] = useState(false);
   const [importDragOver, setImportDragOver] = useState(false);
   const [importResult, setImportResult] = useState(null); // { newAngles: [], skipped: [] }
+  const [importDedupPrompt, setImportDedupPrompt] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [defaultArchivePrompt, setDefaultArchivePrompt] = useState(null);
+  const [defaultArchiveBusy, setDefaultArchiveBusy] = useState(false);
   const importFileRef = useRef(null);
   const debounceRef = useRef(null);
   const pendingConfigRef = useRef({});
@@ -2383,7 +2486,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
     } catch { /* ignore */ }
   };
 
-  const handleAngleStatusChange = async (angleId, newStatus) => {
+  const applyAngleStatusChange = async (angleId, newStatus) => {
     try {
       await api.updateConductorAngle(selectedProject, angleId, { status: newStatus });
       setAngles(prev => ensureArray(prev, 'AgentMonitor.director.anglesState').map(a => a.externalId === angleId ? { ...a, status: newStatus } : a));
@@ -2399,6 +2502,15 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
     } catch { /* ignore */ }
   };
 
+  const handleAngleStatusChange = async (angleId, newStatus) => {
+    const angle = ensureArray(angles, 'AgentMonitor.director.anglesState').find(a => a.externalId === angleId);
+    if (newStatus === 'archived' && angle?.is_system_default === true) {
+      setDefaultArchivePrompt({ angle, ids: [angleId] });
+      return;
+    }
+    await applyAngleStatusChange(angleId, newStatus);
+  };
+
   const handleUpdateAngle = async (angleId, updates) => {
     await api.updateConductorAngle(selectedProject, angleId, updates);
     setAngles(prev => ensureArray(prev, 'AgentMonitor.director.anglesState').map(a => a.externalId === angleId ? { ...a, ...updates } : a));
@@ -2411,8 +2523,8 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
       : [...prev, angleId]);
   }, []);
 
-  const handleArchiveSelectedAngles = useCallback(async () => {
-    const ids = selectedAngleIds.filter(Boolean);
+  const archiveAngleIds = useCallback(async (angleIds) => {
+    const ids = ensureArray(angleIds, 'AgentMonitor.director.archiveAngleIds').filter(Boolean);
     if (!ids.length) return;
     try {
       await Promise.all(ids.map(id => api.updateConductorAngle(selectedProject, id, { status: 'archived' })));
@@ -2420,12 +2532,35 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
         ids.includes(angle.externalId) ? { ...angle, status: 'archived' } : angle
       )));
       setAngleOptions(prev => ensureArray(prev, 'AgentMonitor.director.angleOptionsState').filter(angle => !ids.includes(angle.externalId)));
-      setSelectedAngleIds([]);
+      setSelectedAngleIds(prev => prev.filter(id => !ids.includes(id)));
       toast.success(`${ids.length} angle${ids.length !== 1 ? 's' : ''} archived`);
     } catch (err) {
       toast.error(err?.message || 'Failed to archive selected angles');
     }
-  }, [selectedAngleIds, selectedProject, toast]);
+  }, [selectedProject, toast]);
+
+  const handleArchiveSelectedAngles = useCallback(async () => {
+    const ids = selectedAngleIds.filter(Boolean);
+    if (!ids.length) return;
+    const defaultAngle = ensureArray(angles, 'AgentMonitor.director.anglesState')
+      .find(angle => ids.includes(angle.externalId) && angle.is_system_default === true);
+    if (defaultAngle) {
+      setDefaultArchivePrompt({ angle: defaultAngle, ids });
+      return;
+    }
+    await archiveAngleIds(ids);
+  }, [archiveAngleIds, angles, selectedAngleIds]);
+
+  const handleConfirmDefaultArchive = useCallback(async () => {
+    if (!defaultArchivePrompt?.ids?.length) return;
+    setDefaultArchiveBusy(true);
+    try {
+      await archiveAngleIds(defaultArchivePrompt.ids);
+      setDefaultArchivePrompt(null);
+    } finally {
+      setDefaultArchiveBusy(false);
+    }
+  }, [archiveAngleIds, defaultArchivePrompt]);
 
   // --- Copy LLM prompt for generating a new angle list ---
   // Builds a detailed prompt, embedding the project's brand/product context, that the user
@@ -2609,19 +2744,50 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
     reader.onload = (e) => {
       const text = e.target.result;
       const parsed = parseAnglesMarkdown(text);
-      const existingNames = new Set(ensureArray(angles, 'AgentMonitor.director.anglesState').map(a => a.name.toLowerCase()));
-      const newAngles = parsed.filter(a => !existingNames.has(a.name.toLowerCase()));
-      const skipped = parsed.filter(a => existingNames.has(a.name.toLowerCase()));
-      setImportResult({ newAngles, skipped });
+      const existingByName = new Map();
+      ensureArray(angles, 'AgentMonitor.director.anglesState').forEach((angle) => {
+        const key = normalizeAngleNameForMatch(angle.name);
+        if (!key) return;
+        if (!existingByName.has(key)) existingByName.set(key, []);
+        existingByName.get(key).push(angle);
+      });
+
+      const newAngles = [];
+      const archivedMatches = [];
+      const activeMatches = [];
+
+      parsed.forEach((angle) => {
+        const matches = existingByName.get(normalizeAngleNameForMatch(angle.name)) || [];
+        const activeMatch = matches.find(existing => existing.status === 'active' || existing.status === 'testing');
+        const archivedMatch = matches.find(existing => existing.status === 'archived' || existing.status === 'retired');
+        if (activeMatch) {
+          activeMatches.push({ angle, existingAngle: activeMatch });
+        } else if (archivedMatch) {
+          archivedMatches.push({ angle, existingAngle: archivedMatch });
+        } else {
+          newAngles.push(angle);
+        }
+      });
+
+      setImportResult({
+        newAngles,
+        archivedMatches,
+        activeMatches,
+        skipped: [...archivedMatches.map(match => match.angle), ...activeMatches.map(match => match.angle)],
+      });
     };
     reader.readAsText(file);
   };
 
-  const handleConfirmImport = async () => {
-    if (!importResult?.newAngles?.length) return;
+  const performImport = async ({ newAngles = [], archivedMatches = [] } = {}) => {
     setImporting(true);
     try {
-      for (const angle of importResult.newAngles) {
+      for (const match of archivedMatches) {
+        if (match?.existingAngle?.externalId) {
+          await api.updateConductorAngle(selectedProject, match.existingAngle.externalId, { status: 'active' });
+        }
+      }
+      for (const angle of newAngles) {
         await api.createConductorAngle(selectedProject, {
           name: angle.name,
           description: angle.description,
@@ -2647,9 +2813,25 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
       setAnglesLoadedFor(selectedProject);
       loadAngleOptions(selectedProject, { force: true });
       setImportResult(null);
+      setImportDedupPrompt(null);
       setShowImport(false);
-    } catch { /* ignore */ }
+      const importedCount = newAngles.length + archivedMatches.length;
+      if (importedCount > 0) toast.success(`${importedCount} angle${importedCount !== 1 ? 's' : ''} imported or restored`);
+    } catch (err) {
+      toast.error(err?.message || 'Failed to import angles');
+    }
     finally { setImporting(false); }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importResult) return;
+    const hasDuplicates = (importResult.archivedMatches?.length || 0) > 0 || (importResult.activeMatches?.length || 0) > 0;
+    if (hasDuplicates) {
+      setImportDedupPrompt(importResult);
+      return;
+    }
+    if (!importResult.newAngles?.length) return;
+    await performImport({ newAngles: importResult.newAngles });
   };
 
   const safeProjects = ensureArray(projects, 'AgentMonitor.director.projectsState');
@@ -2704,7 +2886,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
   const archivedAngles = subTab === 'angles' || anglesLoadedFor === selectedProject
     ? pinSystemFirst(safeAngles.filter(a => a.status === 'archived' || a.status === 'retired'))
     : [];
-  const selectableAnglesForBulk = [...activeAngles, ...testingAngles];
+  const selectableAnglesForBulk = [...activeAngles, ...testingAngles].filter(angle => angle.is_system_default !== true);
   const selectedVisibleAngleCount = selectableAnglesForBulk.filter(angle => selectedAngleIds.includes(angle.externalId)).length;
   const allVisibleAnglesSelected = selectableAnglesForBulk.length > 0 && selectedVisibleAngleCount === selectableAnglesForBulk.length;
   const foundationalDocsComplete = foundationalDocsLoadedFor === selectedProject && hasCompleteFoundationalDocs(foundationalDocs);
@@ -3086,7 +3268,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
             </button>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => { setShowImport(!showImport); setImportResult(null); }}
+                onClick={() => { setShowImport(!showImport); setImportResult(null); setImportDedupPrompt(null); }}
                 className={`ed-ghost text-[11px] px-3 py-1.5 flex items-center gap-1.5 ${showImport ? 'ring-1 ring-ed-accent/30' : ''}`}
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5m0 0L7 8m5-5v12" /></svg>
@@ -3165,16 +3347,24 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
                     <p className="text-[11px] text-ed-ink2 mb-3">No new angles found — all angles in the file already exist.</p>
                   )}
                   {importResult.skipped.length > 0 && (
-                    <p className="text-[10px] text-ed-ink3 mb-3">{importResult.skipped.length} angle{importResult.skipped.length !== 1 ? 's' : ''} skipped (already exist)</p>
+                    <div className="text-[10px] text-ed-ink3 mb-3 space-y-1">
+                      <p>{importResult.skipped.length} angle{importResult.skipped.length !== 1 ? 's' : ''} matched existing library entries.</p>
+                      {importResult.archivedMatches?.length > 0 && (
+                        <p>{importResult.archivedMatches.length} archived match{importResult.archivedMatches.length !== 1 ? 'es' : ''}: {importResult.archivedMatches.map(match => match.existingAngle?.name || match.angle?.name).join(', ')}</p>
+                      )}
+                      {importResult.activeMatches?.length > 0 && (
+                        <p>{importResult.activeMatches.length} active match{importResult.activeMatches.length !== 1 ? 'es' : ''}: {importResult.activeMatches.map(match => match.existingAngle?.name || match.angle?.name).join(', ')}</p>
+                      )}
+                    </div>
                   )}
                   <div className="flex gap-2">
-                    {importResult.newAngles.length > 0 && (
+                    {(importResult.newAngles.length > 0 || importResult.skipped.length > 0) && (
                       <button onClick={handleConfirmImport} disabled={importing} className="px-3 py-1.5 rounded-[7px] text-[11px] bg-ed-accent text-white hover:bg-ed-accent/90 transition-colors disabled:opacity-50">
-                        {importing ? 'Importing...' : `Import ${importResult.newAngles.length} Angle${importResult.newAngles.length !== 1 ? 's' : ''}`}
+                        {importing ? 'Importing...' : importResult.skipped.length > 0 ? 'Review Import Options' : `Import ${importResult.newAngles.length} Angle${importResult.newAngles.length !== 1 ? 's' : ''}`}
                       </button>
                     )}
-                    <button onClick={() => { setImportResult(null); setShowImport(false); }} className="ed-ghost text-[11px] px-3 py-1.5">Cancel</button>
-                    {!importing && importResult.newAngles.length === 0 && (
+                    <button onClick={() => { setImportResult(null); setImportDedupPrompt(null); setShowImport(false); }} className="ed-ghost text-[11px] px-3 py-1.5">Cancel</button>
+                    {!importing && importResult.newAngles.length === 0 && importResult.skipped.length === 0 && (
                       <button onClick={() => setImportResult(null)} className="ed-ghost text-[11px] px-3 py-1.5">Try Another File</button>
                     )}
                   </div>
@@ -3728,6 +3918,25 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
           )}
         </div>
       )}
+
+      <ImportDedupDialog
+        open={!!importDedupPrompt}
+        result={importDedupPrompt}
+        importing={importing}
+        onImportNewOnly={() => performImport({ newAngles: importDedupPrompt?.newAngles || [] })}
+        onImportWithArchived={() => performImport({
+          newAngles: importDedupPrompt?.newAngles || [],
+          archivedMatches: importDedupPrompt?.archivedMatches || [],
+        })}
+        onCancel={() => setImportDedupPrompt(null)}
+      />
+      <DefaultAngleArchiveDialog
+        open={!!defaultArchivePrompt}
+        angle={defaultArchivePrompt?.angle}
+        busy={defaultArchiveBusy}
+        onConfirm={handleConfirmDefaultArchive}
+        onCancel={() => setDefaultArchivePrompt(null)}
+      />
     </div>
   );
 }
@@ -3836,7 +4045,20 @@ function AngleCard({ angle, playbooks, onStatusChange, onUpdate, showActions, se
           )}
           <span className={`text-[11px] text-ed-ink3 flex-shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}>&#9656;</span>
           <span className="text-[13px] font-medium text-ed-ink">{angle.name}</span>
-          {angle.is_system_default && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent">Direct Offer</span>}
+          {angle.is_system_default && (
+            <>
+              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-ed-accent/10 text-ed-accent">Direct Offer</span>
+              <span
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-black/5 text-[10px] text-ed-ink2"
+                title="Project default — archiving requires confirmation."
+                aria-label="Project default — archiving requires confirmation."
+              >
+                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 11V8a5 5 0 0110 0v3M6 11h12v9H6z" />
+                </svg>
+              </span>
+            </>
+          )}
           {angle.priority && <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${PRIORITY_COLORS[angle.priority] || 'bg-ed-bg text-gray-600'}`}>{angle.priority}</span>}
           {angle.frame && <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${FRAME_COLORS[angle.frame] || 'bg-ed-bg text-gray-600'}`}>{angle.frame}</span>}
           {angleTags.map(tag => (
