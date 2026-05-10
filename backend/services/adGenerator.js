@@ -1532,7 +1532,18 @@ ${laneInstructions}
 IMPORTANT DIVERSITY RULES:
 - Write exactly ${count} headlines total.
 - Every headline must belong to one of the allowed hook lanes above.
-- NON-NEGOTIABLE ANGLE SIGNAL: every visible headline must reflect at least one of the structured angle's core buyer language, scene fragment, symptom-pattern moment, objection, current belief, or frame-style hook. Generic offer/category statements like "Free Live Webinar", "Free Webinar", "Get Clarity Today", "FINDING YOUR CALLING", or category-only name headlines are forbidden unless the headline itself also contains angle-specific scene, symptom, buyer, or objection language.
+- NON-NEGOTIABLE COLD-SCROLL REQUIREMENT: every visible headline must make sense to a cold Facebook scroller in 1 second with no prior context. Every headline must include BOTH:
+  1. An audience identifier: name who this is for in plain language from the project/angle context.
+  2. An offer identifier: name what is being offered, sold, or invited to in plain language from the project/product description.
+  Examples of audience identifiers: "Christians", "Christian counselors", "aspiring counselors", "parents", "coaches", "founders", or the actual niche audience from this project.
+  Examples of offer identifiers: "free webinar", "course", "program", "consultation", "training", "assessment", "shop", or the actual offer from this project.
+- NON-NEGOTIABLE ANGLE SIGNAL: every visible headline must also reflect at least one of the structured angle's core buyer language, scene fragment, symptom-pattern moment, objection, current belief, desired belief shift, or frame-style hook. The headline cannot be only an audience + offer label; it must carry the angle's specific reason to care.
+- Both rules apply to every headline: audience + offer identifier AND angle-specific signal. If a headline lacks either one, rewrite it before returning JSON.
+- EXAMPLES:
+  Bad: "Free Live Webinar" — names an offer but no audience and no angle signal.
+  Bad: "Get Clarity Today" — no audience, no offer, no angle signal.
+  Better: "Christians Considering Counseling? Free Webinar Maps Your Options" — audience + offer + decision-clarity angle.
+  Better: "Parents Comparing Teen Therapy Options? Free Assessment Helps" — audience + offer + comparison angle.
 - ${angleAvoidList ? `Do not produce headlines that read like: ${angleAvoidList}.` : 'Do not produce generic promise headlines that could fit any webinar, course, product, or brand.'}
 - No two headlines may share the same hook lane AND the same core claim.
 - No two headlines may start with the same opening phrase.
