@@ -4,6 +4,9 @@ const REQUIRED_HOST = 'cheery-cobra-258.convex.cloud';
 const CCW_PROJECT_ID = '526cdad9-fc79-48ef-9657-726f3a6c4a3c';
 const HEADLINE_COUNT = 16;
 
+const angleFlagIndex = process.argv.indexOf('--angle');
+const requestedAngleId = angleFlagIndex >= 0 ? process.argv[angleFlagIndex + 1] : null;
+
 const configuredUrl = process.env.CONVEX_URL || '';
 
 let configuredHost = '';
@@ -41,35 +44,39 @@ const [research, avatar, offer_brief, necessary_beliefs] = await Promise.all([
 
 const docs = { research, avatar, offer_brief, necessary_beliefs };
 const angles = await getConductorAngles(CCW_PROJECT_ID);
-const directOffer = angles.find((angle) => angle.source === 'direct_offer' && angle.name === 'Direct Offer');
+const selectedAngle = requestedAngleId
+  ? angles.find((angle) => angle.externalId === requestedAngleId)
+  : angles.find((angle) => angle.source === 'direct_offer' && angle.name === 'Direct Offer');
 
-if (!directOffer) {
-  throw new Error(`Direct Offer angle not found for ${CCW_PROJECT_ID}`);
+if (!selectedAngle) {
+  throw new Error(requestedAngleId
+    ? `Angle not found for ${CCW_PROJECT_ID}: ${requestedAngleId}`
+    : `Direct Offer angle not found for ${CCW_PROJECT_ID}`);
 }
 
 const angleBrief = {
-  name: directOffer.name,
-  priority: directOffer.priority,
-  frame: directOffer.frame,
-  core_buyer: directOffer.core_buyer,
-  symptom_pattern: directOffer.symptom_pattern,
-  failed_solutions: directOffer.failed_solutions,
-  current_belief: directOffer.current_belief,
-  objection: directOffer.objection,
-  emotional_state: directOffer.emotional_state,
-  scene: directOffer.scene,
-  desired_belief_shift: directOffer.desired_belief_shift,
-  tone: directOffer.tone,
-  avoid_list: directOffer.avoid_list,
-  prompt_hints: directOffer.prompt_hints,
+  name: selectedAngle.name,
+  priority: selectedAngle.priority,
+  frame: selectedAngle.frame,
+  core_buyer: selectedAngle.core_buyer,
+  symptom_pattern: selectedAngle.symptom_pattern,
+  failed_solutions: selectedAngle.failed_solutions,
+  current_belief: selectedAngle.current_belief,
+  objection: selectedAngle.objection,
+  emotional_state: selectedAngle.emotional_state,
+  scene: selectedAngle.scene,
+  desired_belief_shift: selectedAngle.desired_belief_shift,
+  tone: selectedAngle.tone,
+  avoid_list: selectedAngle.avoid_list,
+  prompt_hints: selectedAngle.prompt_hints,
 };
 
 console.log(`[previewDirectOfferHeadlines] project=${project.name} (${CCW_PROJECT_ID})`);
-console.log(`[previewDirectOfferHeadlines] angle=${directOffer.name} (${directOffer.externalId})`);
+console.log(`[previewDirectOfferHeadlines] angle=${selectedAngle.name} (${selectedAngle.externalId})`);
 console.log('[previewDirectOfferHeadlines] mode=dry_run_raw_stage_1_no_persistence_no_filters');
 
-const briefPacket = await extractBrief(project, docs, directOffer.name, angleBrief);
-const result = await generateHeadlines(project, briefPacket, directOffer.name, HEADLINE_COUNT, angleBrief, []);
+const briefPacket = await extractBrief(project, docs, selectedAngle.name, angleBrief);
+const result = await generateHeadlines(project, briefPacket, selectedAngle.name, HEADLINE_COUNT, angleBrief, []);
 const headlines = Array.isArray(result?.headlines) ? result.headlines.slice(0, HEADLINE_COUNT) : [];
 
 console.log('[previewDirectOfferHeadlines] headlines_json=' + JSON.stringify(headlines, null, 2));
