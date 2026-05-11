@@ -112,6 +112,7 @@ router.get('/:projectId/research-prompts', async (req, res) => {
         step: 1,
         title: 'Step 1: Analyze Your Sales Page',
         instruction: 'Start a new conversation in ChatGPT or Claude and paste the prompt below. The product description you provided when creating this project is already included in the prompt — no attachment needed.',
+        alert: 'Make sure you insert the description of your product before running this prompt.',
         prompt: prompt1_AnalyzeSalesPage(
           project.product_description,
           project.sales_page_content
