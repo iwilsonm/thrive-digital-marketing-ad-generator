@@ -48,10 +48,27 @@ export default function CostBarChart({ data, loading, rangeLabel, historyRange, 
     return data.reduce((sum, d) => sum + (d.total || 0), 0);
   }, [data]);
 
+  const rangeHeader = (
+    <>
+      <h4 className="text-[13px] font-semibold text-ed-ink">{rangeLabel || 'Spend History'}</h4>
+      {historyRanges && setHistoryRange && (
+        <select
+          value={historyRange?.key || '30d'}
+          onChange={e => setHistoryRange(historyRanges.find(r => r.key === e.target.value) || historyRanges[2])}
+          className="text-[11px] text-ed-ink bg-ed-bg border border-black/10 rounded-lg px-2 py-1 cursor-pointer"
+        >
+          {historyRanges.map(r => (
+            <option key={r.key} value={r.key}>{r.label}</option>
+          ))}
+        </select>
+      )}
+    </>
+  );
+
   if (loading) {
     return (
       <div className="card p-5">
-        <div className="h-3 w-32 bg-ed-line rounded mb-4 animate-pulse" />
+        <div className="flex items-center gap-3 mb-4">{rangeHeader}</div>
         <div className="h-40 bg-ed-bg rounded-xl animate-pulse" />
       </div>
     );
@@ -60,9 +77,9 @@ export default function CostBarChart({ data, loading, rangeLabel, historyRange, 
   if (!data || data.length === 0) {
     return (
       <div className="card p-5">
-        <h4 className="text-[13px] font-semibold text-ed-ink mb-3">{rangeLabel || 'Spend History'}</h4>
+        <div className="flex items-center gap-3 mb-4">{rangeHeader}</div>
         <div className="h-32 flex items-center justify-center text-[12px] text-ed-ink3">
-          No cost data yet. Costs will appear here after generating ads.
+          No cost data for this range. Try a different range or generate ads to populate spend history.
         </div>
       </div>
     );
@@ -77,18 +94,7 @@ export default function CostBarChart({ data, loading, rangeLabel, historyRange, 
     <div className="card p-5">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <h4 className="text-[13px] font-semibold text-ed-ink">{rangeLabel || 'Spend History'}</h4>
-          {historyRanges && setHistoryRange && (
-            <select
-              value={historyRange?.key || '30d'}
-              onChange={e => setHistoryRange(historyRanges.find(r => r.key === e.target.value) || historyRanges[2])}
-              className="text-[11px] text-ed-ink bg-ed-bg border border-black/10 rounded-lg px-2 py-1 cursor-pointer"
-            >
-              {historyRanges.map(r => (
-                <option key={r.key} value={r.key}>{r.label}</option>
-              ))}
-            </select>
-          )}
+          {rangeHeader}
           <span className="text-[12px] font-semibold text-ed-ink2">Total: {formatCost(grandTotal)}</span>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-ed-ink3">
