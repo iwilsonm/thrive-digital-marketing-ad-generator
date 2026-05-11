@@ -5,6 +5,7 @@ import TemplateTagHelp from './TemplateTagHelp';
 import { useToast } from './Toast';
 import BatchRow from './BatchRow';
 import { usePolling } from '../hooks/usePolling';
+import { ensureArray } from '../utils/collections';
 import {
   CRON_PRESETS, INTERVAL_UNITS, ASPECT_RATIOS,
   STATUS_COLORS, STATUS_LABELS,
@@ -66,7 +67,7 @@ function upsertBatchIntoList(list, batch) {
 }
 
 
-export default function BatchManager({ projectId, project, onBatchComplete }) {
+export default function BatchManager({ projectId, project, conductorAngles = [], onBatchComplete }) {
   const toast = useToast();
   const [expanded, setExpanded] = useState(false);
   const [batches, setBatches] = useState([]);
@@ -77,6 +78,7 @@ export default function BatchManager({ projectId, project, onBatchComplete }) {
   // Create form
   const [batchSize, setBatchSize] = useState(5);
   const [batchAngle, setBatchAngle] = useState('');
+  const batchAngleTouchedRef = useRef(false);
   const [batchAspectRatio, setBatchAspectRatio] = useState('1:1');
   const [isScheduled, setIsScheduled] = useState(false);
   const [cronPreset, setCronPreset] = useState('0 9 * * *');
@@ -93,6 +95,15 @@ export default function BatchManager({ projectId, project, onBatchComplete }) {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [selectedTemplates, setSelectedTemplates] = useState([]); // [{ id, source }, ...]
   const templateTags = useMemo(() => getTemplateTags(uploadedTemplates), [uploadedTemplates]);
+
+  const activeConductorAngles = useMemo(() => {
+    return ensureArray(conductorAngles, 'BatchManager.conductorAngles')
+      .filter(a => a?.status === 'active');
+  }, [conductorAngles]);
+
+  const directOfferAngleName = useMemo(() => {
+    return activeConductorAngles.find(a => a?.is_system_default === true)?.name || '';
+  }, [activeConductorAngles]);
 
   // Upload one-off template
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -123,6 +134,16 @@ export default function BatchManager({ projectId, project, onBatchComplete }) {
       loadBatches();
     }
   }, [expanded, projectId]);
+
+  useEffect(() => {
+    batchAngleTouchedRef.current = false;
+    setBatchAngle('');
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!directOfferAngleName || batchAngleTouchedRef.current) return;
+    setBatchAngle(prev => (prev.trim() ? prev : directOfferAngleName));
+  }, [directOfferAngleName, projectId]);
 
   // Poll for batches — 10s when any batch is active, 30s otherwise
   const hasActiveBatches = batches.some(b => ['queued', 'generating_prompts', 'submitting', 'processing', 'saving_results'].includes(b.status));
@@ -513,6 +534,7 @@ export default function BatchManager({ projectId, project, onBatchComplete }) {
 
     // Load values back into the form
     setBatchSize(item.batch_size || 5);
+    batchAngleTouchedRef.current = true;
     setBatchAngle(item.angle || '');
     setBatchAspectRatio(item.aspect_ratio || '1:1');
     setIsScheduled(!!item.scheduled);
@@ -706,11 +728,19 @@ export default function BatchManager({ projectId, project, onBatchComplete }) {
                 </label>
                 <input
                   value={batchAngle}
-                  onChange={e => setBatchAngle(e.target.value)}
+                  onChange={e => { batchAngleTouchedRef.current = true; setBatchAngle(e.target.value); }}
+                  list="batch-angle-options"
                   disabled={creating}
                   placeholder='e.g., "before & after"'
                   className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent"
                 />
+                {activeConductorAngles.length > 0 && (
+                  <datalist id="batch-angle-options">
+                    {activeConductorAngles.map(a => (
+                      <option key={a.externalId || a.name} value={a.name} label={a.is_system_default ? 'Direct Offer' : a.name} />
+                    ))}
+                  </datalist>
+                )}
               </div>
             </div>
 

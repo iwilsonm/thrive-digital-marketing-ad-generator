@@ -696,7 +696,7 @@ export default function ProjectDetail() {
         )}
         {tab === 'ads' && (
           <ErrorBoundary level="tab" key="ads">
-            <AdStudio projectId={id} project={project} onOpenPipeline={openPipelineQueue} />
+            <AdStudio projectId={id} project={project} conductorAngles={conductorAngles} onOpenPipeline={openPipelineQueue} />
           </ErrorBoundary>
         )}
         {tab === 'tracker' && (

@@ -222,7 +222,7 @@ function getGalleryStatusMeta(ad) {
   };
 }
 
-export default function AdStudio({ projectId, project, onOpenPipeline }) {
+export default function AdStudio({ projectId, project, conductorAngles = [], onOpenPipeline }) {
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -237,6 +237,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
   // Generation controls
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [angle, setAngle] = useState('');
+  const angleTouchedRef = useRef(false);
   const [headline, setHeadline] = useState('');
   const [bodyCopy, setBodyCopy] = useState('');
 
@@ -346,8 +347,18 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
   const galleryRef = useRef(null);
   const [bulkBarInGalleryRange, setBulkBarInGalleryRange] = useState(false);
 
+  const activeConductorAngles = useMemo(() => {
+    return ensureArray(conductorAngles, 'AdStudio.conductorAngles')
+      .filter(a => a?.status === 'active');
+  }, [conductorAngles]);
+
+  const directOfferAngleName = useMemo(() => {
+    return activeConductorAngles.find(a => a?.is_system_default === true)?.name || '';
+  }, [activeConductorAngles]);
+
   useEffect(() => {
     // Reset form state when project changes
+    angleTouchedRef.current = false;
     setAngle('');
     setHeadline('');
     setBodyCopy('');
@@ -362,6 +373,11 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
     setOptionalOpen(false);
     setPromptGuidelines(project?.prompt_guidelines || '');
   }, [projectId]);
+
+  useEffect(() => {
+    if (!directOfferAngleName || angleTouchedRef.current) return;
+    setAngle(prev => (prev.trim() ? prev : directOfferAngleName));
+  }, [directOfferAngleName, projectId]);
 
   const mergeAdData = useCallback((nextAd) => {
     if (!nextAd) return null;
@@ -720,6 +736,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
         return;
       }
       newAngle = data.angle;
+      angleTouchedRef.current = true;
       setAngle(newAngle);
     } catch (err) {
       console.error('Failed to generate angle:', err);
@@ -1894,7 +1911,10 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
     setParentAdId(editableAd.id);
     setEditingAdImage(editableAd.imageUrl || editableAd.thumbnailUrl || ad.imageUrl || ad.thumbnailUrl || null);
     setAspectRatio(editableAd.aspect_ratio || '1:1');
-    if (editableAd.angle) setAngle(editableAd.angle);
+    if (editableAd.angle) {
+      angleTouchedRef.current = true;
+      setAngle(editableAd.angle);
+    }
     if (editableAd.headline) setHeadline(editableAd.headline);
     if (editableAd.body_copy) setBodyCopy(editableAd.body_copy);
     setEditMode('describe');
@@ -1919,7 +1939,10 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
     if (e) e.stopPropagation();
 
     // Load core settings
-    if (ad.angle) setAngle(ad.angle);
+    if (ad.angle) {
+      angleTouchedRef.current = true;
+      setAngle(ad.angle);
+    }
     if (ad.headline) setHeadline(ad.headline);
     if (ad.body_copy) setBodyCopy(ad.body_copy);
     if (ad.aspect_ratio) setAspectRatio(ad.aspect_ratio);
@@ -2791,7 +2814,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
               {(angle.trim() || headline.trim() || bodyCopy.trim()) && (
                 <div className="flex justify-end mb-1">
                   <button
-                    onClick={() => { setAngle(''); setHeadline(''); setBodyCopy(''); }}
+                    onClick={() => { angleTouchedRef.current = true; setAngle(''); setHeadline(''); setBodyCopy(''); }}
                     className="text-[10px] text-ed-ink3 hover:text-ed-rust transition-colors"
                   >
                     Clear fields
@@ -2828,11 +2851,19 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
                   <input
                     data-testid="ad-angle-input"
                     value={angle}
-                    onChange={e => setAngle(e.target.value)}
+                    onChange={e => { angleTouchedRef.current = true; setAngle(e.target.value); }}
+                    list="ad-angle-options"
                     placeholder={generatingAngle ? 'Generating angle...' : 'e.g., "customer transformation story"'}
                     className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent"
                     disabled={generatingAngle}
                   />
+                  {activeConductorAngles.length > 0 && (
+                    <datalist id="ad-angle-options">
+                      {activeConductorAngles.map(a => (
+                        <option key={a.externalId || a.name} value={a.name} label={a.is_system_default ? 'Direct Offer' : a.name} />
+                      ))}
+                    </datalist>
+                  )}
                 </div>
 
                 {/* Headline */}
@@ -3281,6 +3312,7 @@ export default function AdStudio({ projectId, project, onOpenPipeline }) {
       <BatchManager
         projectId={projectId}
         project={project}
+        conductorAngles={conductorAngles}
         onBatchComplete={loadAds}
       />
 
