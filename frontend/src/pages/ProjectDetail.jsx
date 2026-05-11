@@ -201,8 +201,9 @@ export default function ProjectDetail() {
     if (!id) return;
     (async () => {
       try {
-        const angles = await api.getConductorAngles(id);
-        setConductorAngles(Array.isArray(angles) ? angles : []);
+        const result = await api.getConductorAngles(id);
+        const angles = Array.isArray(result) ? result : (result?.angles || []);
+        setConductorAngles(angles);
       } catch { setConductorAngles([]); }
     })();
   }, [id]);

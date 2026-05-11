@@ -28,8 +28,9 @@ export default function AdSetTimeline({ projectId, adSetId, open, onClose, onCha
         const adSet = payload?.ad_set;
         if (adSet?.lifecycle_status === 'passed' && adSet.angle_id) {
           try {
-            const angles = await api.getConductorAngles(projectId);
-            const parent = (angles || []).find((a) => a.externalId === adSet.angle_id);
+            const result = await api.getConductorAngles(projectId);
+            const angles = Array.isArray(result) ? result : (result?.angles || []);
+            const parent = angles.find((a) => a.externalId === adSet.angle_id);
             if (parent) setParentAngle(parent);
           } catch { /* SubAnglesSection just won't render */ }
         }
