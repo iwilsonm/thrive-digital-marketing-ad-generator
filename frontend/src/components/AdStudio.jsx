@@ -43,6 +43,7 @@ const TEMPLATE_RANDOM = 'random';      // Random from Drive folder
 const TEMPLATE_UPLOAD = 'upload';      // Upload one-off image
 const TEMPLATE_SELECT = 'select';      // Pick from uploaded templates
 const TEMPLATE_PICKER_BATCH_SIZE = 24;
+const CUSTOM_ANGLE_MODE = '__custom__';
 
 function getTemplateTags(templates = []) {
   return [...new Set((templates || [])
@@ -237,6 +238,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   // Generation controls
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [angle, setAngle] = useState('');
+  const [angleModeOverride, setAngleModeOverride] = useState('');
   const angleTouchedRef = useRef(false);
   const [headline, setHeadline] = useState('');
   const [bodyCopy, setBodyCopy] = useState('');
@@ -356,9 +358,26 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     return activeConductorAngles.find(a => a?.is_system_default === true)?.name || '';
   }, [activeConductorAngles]);
 
+  const angleMode = useMemo(() => {
+    if (angleModeOverride === CUSTOM_ANGLE_MODE) return CUSTOM_ANGLE_MODE;
+    if (!angle.trim()) return '';
+    return activeConductorAngles.some(a => a?.name === angle) ? angle : CUSTOM_ANGLE_MODE;
+  }, [activeConductorAngles, angle, angleModeOverride]);
+
+  const handleAngleModeChange = useCallback((value) => {
+    angleTouchedRef.current = true;
+    if (value === CUSTOM_ANGLE_MODE) {
+      setAngleModeOverride(CUSTOM_ANGLE_MODE);
+      return;
+    }
+    setAngleModeOverride('');
+    setAngle(value);
+  }, []);
+
   useEffect(() => {
     // Reset form state when project changes
     angleTouchedRef.current = false;
+    setAngleModeOverride('');
     setAngle('');
     setHeadline('');
     setBodyCopy('');
@@ -737,6 +756,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
       }
       newAngle = data.angle;
       angleTouchedRef.current = true;
+      setAngleModeOverride('');
       setAngle(newAngle);
     } catch (err) {
       console.error('Failed to generate angle:', err);
@@ -1913,6 +1933,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     setAspectRatio(editableAd.aspect_ratio || '1:1');
     if (editableAd.angle) {
       angleTouchedRef.current = true;
+      setAngleModeOverride('');
       setAngle(editableAd.angle);
     }
     if (editableAd.headline) setHeadline(editableAd.headline);
@@ -1941,6 +1962,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     // Load core settings
     if (ad.angle) {
       angleTouchedRef.current = true;
+      setAngleModeOverride('');
       setAngle(ad.angle);
     }
     if (ad.headline) setHeadline(ad.headline);
@@ -2814,7 +2836,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
               {(angle.trim() || headline.trim() || bodyCopy.trim()) && (
                 <div className="flex justify-end mb-1">
                   <button
-                    onClick={() => { angleTouchedRef.current = true; setAngle(''); setHeadline(''); setBodyCopy(''); }}
+                    onClick={() => { angleTouchedRef.current = true; setAngleModeOverride(''); setAngle(''); setHeadline(''); setBodyCopy(''); }}
                     className="text-[10px] text-ed-ink3 hover:text-ed-rust transition-colors"
                   >
                     Clear fields
@@ -2848,21 +2870,30 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
                       )}
                     </button>
                   </div>
-                  <input
-                    data-testid="ad-angle-input"
-                    value={angle}
-                    onChange={e => { angleTouchedRef.current = true; setAngle(e.target.value); }}
-                    list="ad-angle-options"
-                    placeholder={generatingAngle ? 'Generating angle...' : 'e.g., "customer transformation story"'}
+                  <select
+                    data-testid="ad-angle-select"
+                    value={angleMode}
+                    onChange={e => handleAngleModeChange(e.target.value)}
                     className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent"
                     disabled={generatingAngle}
-                  />
-                  {activeConductorAngles.length > 0 && (
-                    <datalist id="ad-angle-options">
-                      {activeConductorAngles.map(a => (
-                        <option key={a.externalId || a.name} value={a.name} label={a.is_system_default ? 'Direct Offer' : a.name} />
-                      ))}
-                    </datalist>
+                  >
+                    <option value="">No angle / template-only</option>
+                    {activeConductorAngles.map(a => (
+                      <option key={a.externalId || a.name} value={a.name}>
+                        {a.is_system_default ? `${a.name} (Direct Offer default)` : a.name}
+                      </option>
+                    ))}
+                    <option value={CUSTOM_ANGLE_MODE}>Custom…</option>
+                  </select>
+                  {angleMode === CUSTOM_ANGLE_MODE && (
+                    <input
+                      data-testid="ad-angle-input"
+                      value={angle}
+                      onChange={e => { angleTouchedRef.current = true; setAngleModeOverride(CUSTOM_ANGLE_MODE); setAngle(e.target.value); }}
+                      placeholder={generatingAngle ? 'Generating angle...' : 'e.g., "customer transformation story"'}
+                      className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent mt-2"
+                      disabled={generatingAngle}
+                    />
                   )}
                 </div>
 
