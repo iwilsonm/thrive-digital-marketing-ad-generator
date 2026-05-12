@@ -790,7 +790,7 @@ export async function getProjectStats(projectId) {
 // Batch job helpers
 // =============================================
 
-export async function createBatchJob({ id, project_id, generation_mode, batch_size, angle, angles, aspect_ratio, template_image_id, template_image_ids, template_tag, inspiration_image_id, inspiration_image_ids, product_image_storageId, scheduled, schedule_cron, filter_assigned, status, queued_at, last_heartbeat_at, posting_day, conductor_run_id, angle_name, angle_prompt, angle_brief }) {
+export async function createBatchJob({ id, project_id, generation_mode, batch_size, angle, angles, aspect_ratio, template_image_id, template_image_ids, template_tag, inspiration_image_id, inspiration_image_ids, product_image_storageId, scheduled, schedule_cron, filter_assigned, status, queued_at, last_heartbeat_at, posting_day, conductor_run_id, angle_name, angle_prompt, angle_brief, image_model, image_provider, openai_batch_job }) {
   await mutationWithRetry(api.batchJobs.create, {
     externalId: id,
     project_id,
@@ -816,6 +816,9 @@ export async function createBatchJob({ id, project_id, generation_mode, batch_si
     angle_name: angle_name || undefined,
     angle_prompt: angle_prompt || undefined,
     angle_brief: angle_brief || undefined,
+    image_model: image_model || undefined,
+    image_provider: image_provider || undefined,
+    openai_batch_job: openai_batch_job ?? undefined,
   });
   invalidateQueryCache('batch_jobs');
 }
@@ -855,7 +858,7 @@ export async function getCompletedDirectorBatchStats(sinceDate) {
 }
 
 export async function updateBatchJob(id, fields) {
-  const allowed = ['status', 'gemini_batch_job', 'gpt_prompts', 'error_message', 'started_at', 'completed_at', 'completed_count', 'failed_count', 'run_count', 'scheduled', 'schedule_cron', 'retry_count', 'queued_at', 'last_heartbeat_at', 'stale_detected_at', 'worker_lease_owner', 'worker_lease_expires_at', 'last_scheduled_run_key', 'batch_stats', 'pipeline_state', 'angle', 'angles', 'batch_size', 'aspect_ratio', 'used_template_ids', 'filter_assigned', 'filter_processed', 'filter_processed_at', 'posting_day', 'conductor_run_id', 'angle_name', 'angle_prompt', 'angle_brief', 'flex_ad_id', 'lp_primary_id', 'lp_primary_url', 'lp_primary_status', 'lp_primary_error', 'lp_primary_retry_count', 'lp_secondary_id', 'lp_secondary_url', 'lp_secondary_status', 'lp_secondary_error', 'lp_secondary_retry_count', 'lp_narrative_frames', 'gauntlet_lp_urls'];
+  const allowed = ['status', 'gemini_batch_job', 'openai_batch_job', 'image_model', 'image_provider', 'gpt_prompts', 'error_message', 'started_at', 'completed_at', 'completed_count', 'failed_count', 'run_count', 'scheduled', 'schedule_cron', 'retry_count', 'queued_at', 'last_heartbeat_at', 'stale_detected_at', 'worker_lease_owner', 'worker_lease_expires_at', 'last_scheduled_run_key', 'batch_stats', 'pipeline_state', 'angle', 'angles', 'batch_size', 'aspect_ratio', 'used_template_ids', 'filter_assigned', 'filter_processed', 'filter_processed_at', 'posting_day', 'conductor_run_id', 'angle_name', 'angle_prompt', 'angle_brief', 'flex_ad_id', 'lp_primary_id', 'lp_primary_url', 'lp_primary_status', 'lp_primary_error', 'lp_primary_retry_count', 'lp_secondary_id', 'lp_secondary_url', 'lp_secondary_status', 'lp_secondary_error', 'lp_secondary_retry_count', 'lp_narrative_frames', 'gauntlet_lp_urls'];
   const updates = { externalId: id };
   for (const key of allowed) {
     if (fields[key] !== undefined) {
@@ -932,6 +935,9 @@ function convexBatchToRow(b) {
     product_image_storageId: b.product_image_storageId || null,
     product_image_path: null, // no longer used
     gemini_batch_job: b.gemini_batch_job || null,
+    openai_batch_job: b.openai_batch_job || null,
+    image_model: b.image_model || null,
+    image_provider: b.image_provider || null,
     gpt_prompts: b.gpt_prompts || null,
     status: b.status || 'pending',
     scheduled: b.scheduled ? 1 : 0,
@@ -981,7 +987,7 @@ function convexBatchToRow(b) {
 // API Cost helpers
 // =============================================
 
-export async function logCost({ id, project_id, service, operation, cost_usd, rate_used, image_count, resolution, source, period_date }) {
+export async function logCost({ id, project_id, service, operation, cost_usd, rate_used, image_count, resolution, source, period_date, model, input_tokens, output_tokens, total_tokens, input_text_tokens, input_image_tokens, quality }) {
   await mutationWithRetry(api.apiCosts.log, {
     externalId: id,
     project_id: project_id || undefined,
@@ -991,6 +997,13 @@ export async function logCost({ id, project_id, service, operation, cost_usd, ra
     rate_used: rate_used || undefined,
     image_count: image_count || undefined,
     resolution: resolution || undefined,
+    model: model || undefined,
+    input_tokens: input_tokens || undefined,
+    output_tokens: output_tokens || undefined,
+    total_tokens: total_tokens || undefined,
+    input_text_tokens: input_text_tokens || undefined,
+    input_image_tokens: input_image_tokens || undefined,
+    quality: quality || undefined,
     source: source || 'calculated',
     period_date: period_date || new Date().toISOString().split('T')[0],
   });

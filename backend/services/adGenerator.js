@@ -1,25 +1,15 @@
 import { v4 as uuidv4 } from 'uuid';
 import { chat, chatWithImage, chatWithImages } from './openai.js';
-import { generateImage as geminiGenerateImage } from './gemini.js';
+import {
+  generateImage as generateProviderImage,
+  resolveImageModel,
+  getImageModelLabel,
+} from './imageProvider.js';
 
 // Batch-pipeline LLM model selection (per-call-type, chosen for capability).
 // Migrated off Anthropic 2026-04-30 — see changelog for rationale.
 const BATCH_TEXT_MODEL = 'gpt-5.2';     // copy generation: brief extraction, headlines, body copy, repair, image-prompt-text
 const BATCH_VISION_MODEL = 'gpt-4.1';   // image-prompt-with-vision: 4.1 has reliable vision regardless of OpenAI tier
-
-// Whitelist of allowed image-model strings + which provider handles each.
-// Prevents devtools-injected arbitrary strings from reaching the API.
-const GEMINI_MODELS = new Set(['nano-banana-pro', 'nano-banana-2', 'gemini-3-pro']);
-
-function resolveImageProvider(imageModel) {
-  if (!imageModel || GEMINI_MODELS.has(imageModel)) return geminiGenerateImage;
-  throw new Error(`Unknown image model: ${imageModel}`);
-}
-
-function imageModelLabel(imageModel) {
-  if (imageModel === 'nano-banana-2') return 'Nano Banana 2';
-  return 'Nano Banana Pro';
-}
 
 function makeRenderReference(base64, mimeType, role) {
   if (!base64 || !mimeType) return null;
@@ -641,7 +631,7 @@ export async function generateAd(projectId, options = {}) {
     status: 'generating_copy',
     inspiration_image_id: inspirationImageId || undefined,
     text_model: 'gpt-5.2',
-    image_model: imageModel || 'nano-banana-2',
+    image_model: resolveImageModel(imageModel),
   });
 
   const stopHeartbeat = startAdHeartbeat(adId);
@@ -812,15 +802,19 @@ export async function generateAd(projectId, options = {}) {
 }
 
 async function generateAndSaveImage({ adId, projectId, project, imagePrompt, aspectRatio, angle, productImage, imageModel, renderReferenceImages = [], expectedHeadline = null, expectedBodyCopy = null, emit, modeLabel = 'Mode1', cancelSignal = null }) {
-  const modelLabel = imageModelLabel(imageModel);
-  const imageGen = resolveImageProvider(imageModel);
+  const resolvedImageModel = resolveImageModel(imageModel);
+  const modelLabel = getImageModelLabel(resolvedImageModel);
   await assertAdNotCancelled(adId, cancelSignal);
   emitProgress(emit, adId, { status: 'generating_image', message: (productImage || renderReferenceImages.length > 0)
     ? `Generating image with ${modelLabel} (with product reference)...`
     : `Generating image with ${modelLabel}...`, progress: 70 });
 
-  const { imageBuffer, mimeType: imgMime, imageAttempts } = await imageGen(imagePrompt, aspectRatio, productImage, {
-    projectId, operation: 'ad_image_generation', imageModel, imageSize: '1K', cancelSignal,
+  const { imageBuffer, mimeType: imgMime, imageAttempts } = await generateProviderImage({
+    model: resolvedImageModel,
+    prompt: imagePrompt,
+    aspectRatio,
+    productImage,
+    options: { projectId, operation: 'ad_image_generation', imageModel: resolvedImageModel, imageSize: '1K', cancelSignal },
   });
   await assertAdNotCancelled(adId, cancelSignal);
 
@@ -914,7 +908,7 @@ export async function generateAdMode2(projectId, options = {}) {
     status: 'generating_copy',
     template_image_id: templateImageId,
     text_model: 'gpt-5.2',
-    image_model: imageModel || 'nano-banana-2',
+    image_model: resolveImageModel(imageModel),
   });
 
   const stopHeartbeat = startAdHeartbeat(adId);
@@ -2629,7 +2623,7 @@ export async function regenerateImageOnly(projectId, options = {}) {
     image_prompt: imagePrompt.trim(),
     gpt_creative_output: imagePrompt.trim(),
     parent_ad_id: parentAdId || undefined,
-    image_model: imageModel || 'nano-banana-2',
+    image_model: resolveImageModel(imageModel),
   });
 
   emit({ type: 'status', status: 'generating_image', message: 'Preparing image generation...', progress: 5, adId });

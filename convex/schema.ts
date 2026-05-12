@@ -220,7 +220,10 @@ export default defineSchema({
     inspiration_image_id: v.optional(v.string()),
     inspiration_image_ids: v.optional(v.string()),    // JSON array of drive template IDs (multi-select)
     product_image_storageId: v.optional(v.id("_storage")),
+    image_model: v.optional(v.string()),              // Image model selected for this batch (default "nano-banana-2")
+    image_provider: v.optional(v.string()),           // "gemini" | "openai" derived from image_model at creation time
     gemini_batch_job: v.optional(v.nullable(v.string())),
+    openai_batch_job: v.optional(v.nullable(v.string())),
     gpt_prompts: v.optional(v.nullable(v.string())),
     status: v.optional(v.string()),
     scheduled: v.optional(v.boolean()),
@@ -278,9 +281,16 @@ export default defineSchema({
     service: v.string(),
     operation: v.optional(v.string()),
     cost_usd: v.number(),
+    model: v.optional(v.string()),
+    input_tokens: v.optional(v.number()),
+    output_tokens: v.optional(v.number()),
+    total_tokens: v.optional(v.number()),
+    input_text_tokens: v.optional(v.number()),
+    input_image_tokens: v.optional(v.number()),
     rate_used: v.optional(v.number()),
     image_count: v.optional(v.number()),
     resolution: v.optional(v.string()),
+    quality: v.optional(v.string()),
     source: v.optional(v.string()),
     period_date: v.string(),
     created_at: v.string(),
@@ -471,6 +481,7 @@ export default defineSchema({
     headline_style: v.optional(v.string()),      // freeform prompt guidance
     primary_text_style: v.optional(v.string()),  // freeform prompt guidance
     template_tag: v.optional(v.string()),         // optional uploaded-template tag for Director random template selection
+    image_model: v.optional(v.string()),          // Image model for Director-created batches (default "nano-banana-2")
     default_campaign_id: v.optional(v.string()),  // → campaigns.externalId for auto-deployed ad sets
     run_schedule: v.string(),           // "daily" | "weekdays" | "weekly_monday" | "custom" | "manual_only"
     run_schedule_days: v.optional(v.string()),   // JSON array of day numbers (0=Sun...6=Sat) for custom schedule

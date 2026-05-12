@@ -22,6 +22,10 @@ const OPENAI_RATES = {
   'o3-deep-research':   { input: 0, output: 0 },      // billed via billing API only
 };
 
+const OPENAI_IMAGE_RATE_DEFAULTS = {
+  'gpt-image-2': { input: 8.00, output: 30.00 },
+};
+
 export function normalizeGeminiResolution(resolution = '2K') {
   const value = String(resolution || '').trim().toUpperCase();
   if (['4K', '4096', '4096PX'].includes(value)) return '4K';
@@ -109,6 +113,63 @@ export async function logOpenAICost({ model, operation, inputTokens, outputToken
     return record;
   } catch (err) {
     console.error('[CostTracker] Failed to log OpenAI cost:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Log an OpenAI image-generation cost from Image API usage tokens.
+ * Uses admin-editable rate settings and stores token evidence for auditability.
+ */
+export async function logOpenAIImageCost({
+  projectId = null,
+  operation = 'ad_image_generation',
+  model = 'gpt-image-2',
+  usage = {},
+  size = null,
+  quality = 'medium',
+} = {}) {
+  try {
+    const defaults = OPENAI_IMAGE_RATE_DEFAULTS[model] || OPENAI_IMAGE_RATE_DEFAULTS['gpt-image-2'];
+    const inputRateRaw = await getSetting('openai_gpt_image_2_input_rate_per_million');
+    const outputRateRaw = await getSetting('openai_gpt_image_2_output_rate_per_million');
+    const inputRate = Number.isFinite(parseFloat(inputRateRaw)) ? parseFloat(inputRateRaw) : defaults.input;
+    const outputRate = Number.isFinite(parseFloat(outputRateRaw)) ? parseFloat(outputRateRaw) : defaults.output;
+
+    const inputTokens = Number(usage?.input_tokens || 0);
+    const outputTokens = Number(usage?.output_tokens || 0);
+    const totalTokens = Number(usage?.total_tokens || (inputTokens + outputTokens));
+    const inputDetails = usage?.input_tokens_details || {};
+    const inputTextTokens = Number(inputDetails.text_tokens || 0);
+    const inputImageTokens = Number(inputDetails.image_tokens || 0);
+    const totalCost = (inputTokens / 1_000_000) * inputRate + (outputTokens / 1_000_000) * outputRate;
+
+    if (totalCost <= 0) return null;
+
+    const record = {
+      id: uuidv4(),
+      project_id: projectId,
+      service: 'openai',
+      operation,
+      cost_usd: Math.round(totalCost * 1000000) / 1000000,
+      model,
+      input_tokens: inputTokens || null,
+      output_tokens: outputTokens || null,
+      total_tokens: totalTokens || null,
+      input_text_tokens: inputTextTokens || null,
+      input_image_tokens: inputImageTokens || null,
+      rate_used: outputRate,
+      image_count: 1,
+      resolution: size || null,
+      quality: quality || null,
+      source: 'calculated',
+      period_date: new Date().toISOString().split('T')[0]
+    };
+
+    await logCost(record);
+    return record;
+  } catch (err) {
+    console.error('[CostTracker] Failed to log OpenAI image cost:', err.message);
     return null;
   }
 }

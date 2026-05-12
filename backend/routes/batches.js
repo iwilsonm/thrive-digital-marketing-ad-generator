@@ -7,6 +7,7 @@ import {
 } from '../convexClient.js';
 import { copyStorageBlob } from '../utils/adImages.js';
 import { assertTemplateTagHasActiveTemplates, normalizeTemplateTag } from '../services/adGenerator.js';
+import { resolveImageModel, getImageProvider } from '../services/imageProvider.js';
 
 // Durable batch execution is handled by the cron-backed scheduler. These hooks
 // are retained for route compatibility; the scheduler reads Convex directly.
@@ -37,6 +38,7 @@ router.post('/:projectId/batches', async (req, res) => {
     product_image,
     product_image_mime,
     skip_product_image,
+    image_model,
     scheduled = false,
     schedule_cron,
     run_immediately = true
@@ -61,6 +63,8 @@ router.post('/:projectId/batches', async (req, res) => {
   }
 
   const id = uuidv4();
+  const resolvedImageModel = resolveImageModel(image_model);
+  const imageProvider = getImageProvider(resolvedImageModel);
 
   // Upload product image to Convex storage if provided, else use project-level image
   let productImageStorageId = undefined;
@@ -103,6 +107,8 @@ router.post('/:projectId/batches', async (req, res) => {
       status: shouldQueueNow ? 'queued' : 'pending',
       queued_at: shouldQueueNow ? now : undefined,
       last_heartbeat_at: shouldQueueNow ? now : undefined,
+      image_model: resolvedImageModel,
+      image_provider: imageProvider,
     });
 
     // If scheduled, register the cron job

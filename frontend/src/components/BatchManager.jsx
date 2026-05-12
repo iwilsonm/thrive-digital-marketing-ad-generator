@@ -6,6 +6,7 @@ import { useToast } from './Toast';
 import BatchRow from './BatchRow';
 import { usePolling } from '../hooks/usePolling';
 import { ensureArray } from '../utils/collections';
+import { IMAGE_MODEL_OPTIONS, DEFAULT_IMAGE_MODEL, getImageModelDescription } from '../utils/imageModels';
 import {
   CRON_PRESETS, INTERVAL_UNITS, ASPECT_RATIOS,
   STATUS_COLORS, STATUS_LABELS,
@@ -82,6 +83,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
   const [batchAngleModeOverride, setBatchAngleModeOverride] = useState('');
   const batchAngleTouchedRef = useRef(false);
   const [batchAspectRatio, setBatchAspectRatio] = useState('1:1');
+  const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
   const [isScheduled, setIsScheduled] = useState(false);
   const [cronPreset, setCronPreset] = useState('0 9 * * *');
   const [intervalAmount, setIntervalAmount] = useState(30);
@@ -286,6 +288,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
       batch_size: batchSize,
       angle: batchAngle.trim() || undefined,
       aspect_ratio: batchAspectRatio,
+      image_model: imageModel,
       scheduled: isScheduled,
       schedule_cron: isScheduled ? getEffectiveCron() : undefined,
       run_immediately: !isScheduled
@@ -530,6 +533,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
       batch_size: batchSize,
       angle: batchAngle.trim() || '',
       aspect_ratio: batchAspectRatio,
+      image_model: imageModel,
       scheduled: isScheduled,
       schedule_cron: isScheduled ? cronExpression : undefined,
       templateSource,
@@ -541,6 +545,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     setQueue(prev => [...prev, config]);
     setBatchAngle('');
     setIsScheduled(false);
+    setImageModel(DEFAULT_IMAGE_MODEL);
   };
 
   const handleRemoveFromQueue = (tempId) => {
@@ -557,6 +562,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     setBatchAngleModeOverride('');
     setBatchAngle(item.angle || '');
     setBatchAspectRatio(item.aspect_ratio || '1:1');
+    setImageModel(item.image_model || DEFAULT_IMAGE_MODEL);
     setIsScheduled(!!item.scheduled);
 
     if (item.schedule_cron) {
@@ -598,6 +604,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
           batch_size: config.batch_size,
           angle: config.angle || undefined,
           aspect_ratio: config.aspect_ratio,
+          image_model: config.image_model || DEFAULT_IMAGE_MODEL,
           scheduled: config.scheduled,
           schedule_cron: config.schedule_cron,
           run_immediately: !config.scheduled
@@ -702,7 +709,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
           <div className="p-5 border-b border-black/5">
             <h4 className="text-[13px] font-semibold text-ed-ink mb-3">New Batch</h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
               {/* Batch size */}
               <div>
                 <label className="text-[11px] font-medium text-ed-ink2 mb-1 flex items-center gap-1">
@@ -738,6 +745,25 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                     <option key={ar.value} value={ar.value}>{ar.label}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Image generator */}
+              <div>
+                <label className="text-[11px] font-medium text-ed-ink2 mb-1 flex items-center gap-1">
+                  Image Generator
+                  <InfoTooltip text="Choose which image provider renders every ad in this batch. Gemini is the default." position="right" />
+                </label>
+                <select
+                  value={imageModel}
+                  onChange={e => setImageModel(e.target.value)}
+                  disabled={creating}
+                  className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent"
+                >
+                  {IMAGE_MODEL_OPTIONS.map(option => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-ed-ink3 mt-0.5">{getImageModelDescription(imageModel)}</p>
               </div>
 
               {/* Angle */}

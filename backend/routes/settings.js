@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '../auth.js';
 import { getSetting, setSetting, deleteSetting, getAllSettings, getDashboardTodos, replaceDashboardTodos } from '../convexClient.js';
 import { getDriveClient } from './drive.js';
 import { refreshGeminiRates } from '../services/costTracker.js';
+import { generateImage as generateOpenAIImage } from '../services/openaiImage.js';
 
 const router = Router();
 router.use(requireAuth, requireRole('admin'));
@@ -23,6 +24,9 @@ const ALLOWED_SETTING_KEYS = [
   'gemini_rate_1k',
   'gemini_rate_2k',
   'gemini_rate_4k',
+  'openai_gpt_image_2_input_rate_per_million',
+  'openai_gpt_image_2_output_rate_per_million',
+  'openai_gpt_image_2_rates_updated_at',
   'cloudflare_account_id',
   'cloudflare_api_token',
   'cloudflare_pages_projects',
@@ -143,6 +147,36 @@ router.post('/test-openai', async (req, res) => {
     res.json({ success: true, message: 'OpenAI API key is valid' });
   } catch (err) {
     res.status(500).json({ error: `Connection failed: ${err.message}` });
+  }
+});
+
+router.post('/test-openai-image', async (req, res) => {
+  try {
+    await generateOpenAIImage(
+      'Simple product-style test image with the word OK on a plain white card.',
+      '1:1',
+      null,
+      {
+        projectId: null,
+        operation: 'settings_openai_image_test',
+        quality: 'low',
+      }
+    );
+    res.json({ ok: true, success: true, message: 'GPT Image 2 test generation succeeded.' });
+  } catch (err) {
+    const status = err?.status || err?.statusCode || 400;
+    const orgVerification = /verify|verification|organization|org/i.test(err?.message || '');
+    res.status(status >= 500 ? 500 : 400).json({
+      ok: false,
+      success: false,
+      error: orgVerification
+        ? `OpenAI organization verification may be required for GPT Image 2: ${err.message}`
+        : err.message,
+      code: err.code || err.error?.code || null,
+      userActionable: err.userActionable ?? true,
+      actionUrl: err.actionUrl || 'https://platform.openai.com/settings/organization/general',
+      actionLabel: err.actionLabel || 'OpenAI organization settings',
+    });
   }
 });
 

@@ -463,6 +463,8 @@ export default function Settings() {
     gemini_rate_1k: '',
     gemini_rate_2k: '',
     gemini_rate_4k: '',
+    openai_gpt_image_2_input_rate_per_million: '',
+    openai_gpt_image_2_output_rate_per_million: '',
     // Phase 2A — Meta integration global config
     meta_app_id: '',
     meta_app_secret: '',
@@ -509,6 +511,8 @@ export default function Settings() {
         gemini_rate_1k: data.gemini_rate_1k || '',
         gemini_rate_2k: data.gemini_rate_2k || '',
         gemini_rate_4k: data.gemini_rate_4k || '',
+        openai_gpt_image_2_input_rate_per_million: data.openai_gpt_image_2_input_rate_per_million || '8',
+        openai_gpt_image_2_output_rate_per_million: data.openai_gpt_image_2_output_rate_per_million || '30',
       }));
       // (Cloudflare Pages projects removed — LP publishing now uses Shopify via Director config)
     } catch (err) {
@@ -529,6 +533,11 @@ export default function Settings() {
       if (form.gemini_rate_1k) payload.gemini_rate_1k = form.gemini_rate_1k;
       if (form.gemini_rate_2k) payload.gemini_rate_2k = form.gemini_rate_2k;
       if (form.gemini_rate_4k) payload.gemini_rate_4k = form.gemini_rate_4k;
+      if (form.openai_gpt_image_2_input_rate_per_million) payload.openai_gpt_image_2_input_rate_per_million = form.openai_gpt_image_2_input_rate_per_million;
+      if (form.openai_gpt_image_2_output_rate_per_million) payload.openai_gpt_image_2_output_rate_per_million = form.openai_gpt_image_2_output_rate_per_million;
+      if (payload.openai_gpt_image_2_input_rate_per_million || payload.openai_gpt_image_2_output_rate_per_million) {
+        payload.openai_gpt_image_2_rates_updated_at = new Date().toISOString();
+      }
       // Phase 2A — Meta integration
       if (form.meta_app_id.trim()) payload.meta_app_id = form.meta_app_id.trim();
       if (form.meta_app_secret.trim()) payload.meta_app_secret = form.meta_app_secret.trim();
@@ -586,6 +595,8 @@ export default function Settings() {
           result = { ...result, message: 'Anthropic API key is valid and saved for Creative Filter QA.' };
           toast.success('Anthropic key tested and saved');
         }
+      } else if (service === 'openai-image') {
+        result = await api.testOpenAIImage();
       }
       setTestResults(prev => ({ ...prev, [service]: result.message || (result.success === false ? 'Check failed' : 'Connected!') }));
     } catch (err) {
@@ -882,9 +893,22 @@ export default function Settings() {
                   )}
                   Test
                 </button>
+                <button
+                  onClick={() => testConnection('openai-image')}
+                  disabled={testResults['openai-image'] === 'testing...'}
+                  className="ed-ghost text-[13px] whitespace-nowrap inline-flex items-center gap-1.5"
+                >
+                  {testResults['openai-image'] === 'testing...' && (
+                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
+                    </svg>
+                  )}
+                  Test GPT Image 2
+                </button>
                 <CredentialRemoveButton settingKey="openai_api_key" settings={settings} onRemove={setPendingCredentialDelete} />
               </div>
               {testResults.openai && <p className="text-[12px] text-ed-ink3 mt-1">{testResults.openai}</p>}
+              {testResults['openai-image'] && <p className="text-[12px] text-ed-ink3 mt-1">{testResults['openai-image']}</p>}
             </div>
 
             <div>
@@ -1100,6 +1124,40 @@ export default function Settings() {
                 onChange={e => setForm(p => ({ ...p, gemini_rate_4k: e.target.value }))}
                 className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent"
                 placeholder="e.g., 0.151"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* OpenAI Image Rates */}
+        <div className="ed-card p-6">
+          <h2 className="text-[15px] font-serif font-[420] text-ed-ink tracking-tight flex items-center gap-1 mb-1">
+            OpenAI Image Rates
+            <InfoTooltip text="Token pricing used for GPT Image 2 image cost tracking. OpenAI image costs are computed from actual input/output tokens returned by the Image API." position="right" />
+          </h2>
+          <p className="text-[12px] text-ed-ink3 mb-4">
+            Defaults are $8 / 1M input tokens and $30 / 1M output tokens. Edit if OpenAI pricing changes.
+            {settings.openai_gpt_image_2_rates_updated_at && (
+              <span> Last updated: {new Date(settings.openai_gpt_image_2_rates_updated_at).toLocaleString()}</span>
+            )}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[12px] font-medium text-ed-ink2 mb-1.5">GPT Image 2 input ($/1M tokens)</label>
+              <input
+                value={form.openai_gpt_image_2_input_rate_per_million}
+                onChange={e => setForm(p => ({ ...p, openai_gpt_image_2_input_rate_per_million: e.target.value }))}
+                className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent"
+                placeholder="8"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-ed-ink2 mb-1.5">GPT Image 2 output ($/1M tokens)</label>
+              <input
+                value={form.openai_gpt_image_2_output_rate_per_million}
+                onChange={e => setForm(p => ({ ...p, openai_gpt_image_2_output_rate_per_million: e.target.value }))}
+                className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent"
+                placeholder="30"
               />
             </div>
           </div>

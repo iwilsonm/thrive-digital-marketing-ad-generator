@@ -457,6 +457,7 @@ export const api = {
       method: 'POST',
       ...(apiKey ? { body: JSON.stringify({ api_key: apiKey }) } : {}),
     }),
+  testOpenAIImage: () => request('/settings/test-openai-image', { method: 'POST' }),
   testGemini: (apiKey = '') =>
     request('/settings/test-gemini', {
       method: 'POST',

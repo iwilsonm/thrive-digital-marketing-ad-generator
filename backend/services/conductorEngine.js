@@ -35,6 +35,7 @@ import {
   normalizeTemplateTag,
 } from './adGenerator.js';
 import { copyStorageBlob } from '../utils/adImages.js';
+import { resolveImageModel, getImageProvider } from './imageProvider.js';
 
 /**
  * Copy the project's product image into a fresh storage blob owned by the new batch.
@@ -270,6 +271,7 @@ export async function runDirectorForProject(projectId, runType = 'manual') {
         const angleBriefJSON = hasStructuredBrief(angleInfo)
           ? JSON.stringify(buildAngleBriefJSON(angleInfo))
           : undefined;
+        const resolvedImageModel = resolveImageModel(config?.image_model);
 
         await createBatchJob({
           id: batchId,
@@ -286,6 +288,8 @@ export async function runDirectorForProject(projectId, runType = 'manual') {
           angle_prompt: anglePrompt,
           angle_brief: angleBriefJSON,
           template_tag: normalizeTemplateTag(config?.template_tag) || undefined,
+          image_model: resolvedImageModel,
+          image_provider: getImageProvider(resolvedImageModel),
         });
 
         // Update angle usage stats (skip for fallback angles with no DB record)
@@ -1474,9 +1478,11 @@ async function createTestBatchRound({
   updateAngleUsage = false,
   queueForScheduler = false,
   templateTag = '',
+  imageModel = undefined,
 }) {
   const batchId = uuidv4();
   const queuedAt = queueForScheduler ? new Date().toISOString() : undefined;
+  const resolvedImageModel = resolveImageModel(imageModel);
   emit(withTestProgress(roundNumber, {
     type: 'progress',
     step: 'creating_batch',
@@ -1500,6 +1506,8 @@ async function createTestBatchRound({
     angle_prompt: anglePrompt,
     angle_brief: angleBriefJSON,
     template_tag: normalizeTemplateTag(templateTag) || undefined,
+    image_model: resolvedImageModel,
+    image_provider: getImageProvider(resolvedImageModel),
     status: queueForScheduler ? 'queued' : undefined,
     queued_at: queuedAt,
     last_heartbeat_at: queuedAt,
@@ -3095,6 +3103,7 @@ async function continueBackgroundTestRun(run) {
       updateAngleUsage: false,
       queueForScheduler: true,
       templateTag: run.template_tag || batch.template_tag || '',
+      imageModel: batch.image_model,
     });
 
     batchInfos.push(nextBatchInfo);
@@ -3326,7 +3335,7 @@ export async function runTestBatch(projectId, sendEvent, { skipBatchLaunch = fal
 
   try {
     emit({ type: 'progress', step: 'selecting_angle', message: 'Selecting angle...' });
-    const { project, angleInfo, anglePrompt, angleBriefJSON } = await loadTestRunContext(projectId, angleOverride);
+    const { config, project, angleInfo, anglePrompt, angleBriefJSON } = await loadTestRunContext(projectId, angleOverride);
 
     emit({ type: 'progress', step: 'building_prompt', message: `Building prompt for "${angleInfo.name}"...` });
     const batchSize = requiredPasses;
@@ -3341,6 +3350,7 @@ export async function runTestBatch(projectId, sendEvent, { skipBatchLaunch = fal
       roundNumber: 1,
       emit,
       updateAngleUsage: true,
+      imageModel: config?.image_model,
     });
 
     emit({ type: 'progress', step: 'saving_run', message: 'Saving run record...' });
@@ -3674,7 +3684,7 @@ export async function runFullTestPipeline(projectId, sendEvent, { angleOverride 
       message: 'Preparing selected angle...',
       targetCount: requiredPasses,
     });
-    const { project, angleInfo, anglePrompt, angleBriefJSON } = await loadTestRunContext(projectId, queuedAngleOverride);
+    const { config, project, angleInfo, anglePrompt, angleBriefJSON } = await loadTestRunContext(projectId, queuedAngleOverride);
     angleName = angleInfo.name;
     errorStage = 'building_prompt';
     emit({
@@ -3704,6 +3714,7 @@ export async function runFullTestPipeline(projectId, sendEvent, { angleOverride 
         emit,
         updateAngleUsage: roundNumber === 1,
         templateTag: normalizedTemplateTag,
+        imageModel: config?.image_model,
       });
 
       batchInfos.push(batchInfo);

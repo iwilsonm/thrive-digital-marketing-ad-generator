@@ -14,6 +14,7 @@ import { usePolling } from '../hooks/usePolling';
 import { ensureArray } from '../utils/collections';
 import { fetchBlobOrThrow } from '../utils/downloads';
 import { resizeImageForUpload, estimateBase64BodyBytes, MAX_COMBINED_BODY_BYTES } from '../utils/imageResize';
+import { IMAGE_MODEL_OPTIONS, DEFAULT_IMAGE_MODEL, getImageModelDescription } from '../utils/imageModels';
 
 // Helper: resize a file then base64-encode it. Logs the size delta to console for diagnostics.
 async function resizeAndBase64(file) {
@@ -299,7 +300,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   const [skipProductImage, setSkipProductImage] = useState(false);
 
   // Image generation model
-  const [imageModel, setImageModel] = useState('nano-banana-2');
+  const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
 
   // Product image
   const [productFile, setProductFile] = useState(null);
@@ -2817,19 +2818,19 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
               <div className="mb-5">
                 <label className="text-[11px] uppercase tracking-[0.14em] text-ed-ink3 mb-2 flex items-center gap-1 font-geist">
                   Image Generator
-                  <InfoTooltip text="Choose which Gemini image model renders the final ad." position="right" />
+                  <InfoTooltip text="Choose which image provider renders the final ad. Gemini is the default; GPT Image 2 uses OpenAI image credits." position="right" />
                 </label>
                 <select
                   value={imageModel}
                   onChange={e => setImageModel(e.target.value)}
                   className="text-[12px] text-ed-ink bg-ed-bg border border-ed-line rounded-lg px-3 py-2 w-full cursor-pointer hover:border-ed-accent/30 transition-colors"
                 >
-                  <option value="nano-banana-pro">Nano Banana Pro (Gemini 3 Pro)</option>
-                  <option value="nano-banana-2">Nano Banana 2 (Gemini 3.1 Flash)</option>
+                  {IMAGE_MODEL_OPTIONS.map(option => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
                 </select>
                 <p className="text-[10px] text-ed-ink3 mt-1">
-                  {imageModel === 'nano-banana-pro' && 'High-fidelity Gemini image generation.'}
-                  {imageModel === 'nano-banana-2' && 'Faster Gemini generation with improved text rendering, up to 4K (current default).'}
+                  {getImageModelDescription(imageModel)}
                 </p>
               </div>
 

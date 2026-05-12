@@ -11,6 +11,7 @@ import InfoTooltip from './InfoTooltip';
 import TemplateTagHelp from './TemplateTagHelp';
 import EditorialPageHeader from './editorial/EditorialPageHeader';
 import { buildAnglePromptText } from '../utils/anglePrompt';
+import { IMAGE_MODEL_OPTIONS, DEFAULT_IMAGE_MODEL, getImageModelDescription, resolveImageModel } from '../utils/imageModels';
 
 const LEVEL_CONFIG = {
   OK:        { color: 'text-ed-green',       icon: '\u2713', bg: 'bg-ed-green/10' },
@@ -3558,7 +3559,7 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
           </SettingsSection>
 
           <SettingsSection title="Ad Set Production" description="Control how many angle-based ad sets are created and how many ad variations each set contains.">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <FieldLabel tooltip="How many ad sets the Creative Director should try to create. Each ad set is centered on one angle.">Ad Set Target</FieldLabel>
                 <input
@@ -3584,6 +3585,19 @@ function DirectorTab({ onRefresh, externalProjectId, externalProject, userRole, 
                   className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent w-full text-[12px]"
                 />
                 <p className="text-[9px] text-ed-ink3 mt-0.5">Target approved ads, not just generated ads. One ad set targets one angle; top-up batches fill in any QA misses.</p>
+              </div>
+              <div>
+                <FieldLabel tooltip="Choose which image provider the Director uses for newly-created batches. In-flight batches keep the model captured when they were created.">Image Generator</FieldLabel>
+                <select
+                  value={resolveImageModel(config.image_model || DEFAULT_IMAGE_MODEL)}
+                  onChange={e => handleSaveConfig({ image_model: e.target.value })}
+                  className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent w-full text-[12px]"
+                >
+                  {IMAGE_MODEL_OPTIONS.map(option => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-ed-ink3 mt-0.5">{getImageModelDescription(config.image_model || DEFAULT_IMAGE_MODEL)}</p>
               </div>
             </div>
 
