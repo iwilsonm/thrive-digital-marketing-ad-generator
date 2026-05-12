@@ -200,6 +200,7 @@ router.put('/config/:projectId', async (req, res) => {
       'angle_rotation', 'explore_ratio', 'run_schedule', 'run_schedule_days', 'run_schedule_hour', 'posting_days',
       'score_threshold', 'auto_learn',
       'headline_style', 'primary_text_style', 'template_tag', 'angle_tag_filter', 'default_campaign_id',
+      'image_model',
       // Phase 4 — sub-angle derivation + health-biased Director
       'health_bias',
       'sub_angle_derivation_enabled',
