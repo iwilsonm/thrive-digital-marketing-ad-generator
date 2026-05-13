@@ -259,7 +259,7 @@ Return ONLY valid JSON, no markdown.`
  * Uses a fast GPT model to check the prompt for violations and fix them.
  * Returns the original prompt unchanged if no guidelines are set or no changes needed.
  */
-export async function reviewPromptWithGuidelines(imagePrompt, guidelines) {
+export async function reviewPromptWithGuidelines(imagePrompt, guidelines, options = {}) {
   if (!guidelines || !guidelines.trim()) return imagePrompt;
 
   try {
@@ -281,7 +281,10 @@ Rules:
       }
     ];
 
-    const revisedPrompt = await chat(reviewMessages, 'gpt-4.1-mini', { operation: 'prompt_guideline_review' });
+    const revisedPrompt = await chat(reviewMessages, 'gpt-4.1-mini', {
+      operation: 'prompt_guideline_review',
+      projectId: options.projectId || null,
+    });
     return revisedPrompt.trim();
   } catch (err) {
     console.warn('[AdGenerator] Prompt guidelines review failed, using original prompt:', err.message);
@@ -737,7 +740,7 @@ export async function generateAd(projectId, options = {}) {
     if (project.prompt_guidelines) {
       await assertAdNotCancelled(adId, cancelSignal);
       emitProgress(emit, adId, { status: 'generating_copy', message: 'Reviewing prompt against guidelines...', progress: 55 });
-      imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines);
+      imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines, { projectId });
       await assertAdNotCancelled(adId, cancelSignal);
     }
 
@@ -1003,7 +1006,7 @@ export async function generateAdMode2(projectId, options = {}) {
     if (project.prompt_guidelines) {
       await assertAdNotCancelled(adId, cancelSignal);
       emitProgress(emit, adId, { status: 'generating_copy', message: 'Reviewing prompt against guidelines...', progress: 55 });
-      imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines);
+      imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines, { projectId });
       await assertAdNotCancelled(adId, cancelSignal);
     }
 
@@ -2641,7 +2644,7 @@ export async function regenerateImageOnly(projectId, options = {}) {
     if (project.prompt_guidelines) {
       await assertAdNotCancelled(adId, cancelSignal);
       emitProgress(emit, adId, { status: 'generating_image', message: 'Reviewing prompt against guidelines...', progress: 20 });
-      finalPrompt = await reviewPromptWithGuidelines(finalPrompt, project.prompt_guidelines);
+      finalPrompt = await reviewPromptWithGuidelines(finalPrompt, project.prompt_guidelines, { projectId });
       await assertAdNotCancelled(adId, cancelSignal);
       // Update the stored prompt if it changed
       if (finalPrompt !== imagePrompt.trim()) {

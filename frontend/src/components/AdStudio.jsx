@@ -6,6 +6,7 @@ import { api } from '../api';
 import BatchManager from './BatchManager';
 import GenerationQueue from './GenerationQueue';
 import InfoTooltip from './InfoTooltip';
+import PromptGuidelinesEditor from './PromptGuidelinesEditor';
 import TemplateTagHelp from './TemplateTagHelp';
 import EditorialPageHeader from './editorial/EditorialPageHeader';
 import { useToast } from './Toast';
@@ -228,11 +229,6 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   const toast = useToast();
   const navigate = useNavigate();
 
-  // Prompt guidelines (editable on Ad Studio, synced to project)
-  const [promptGuidelines, setPromptGuidelines] = useState(project?.prompt_guidelines || '');
-  const [guidelinesSaving, setGuidelinesSaving] = useState(false);
-  const guidelinesTimer = useRef(null);
-
   // Optional fields collapse
   const [optionalOpen, setOptionalOpen] = useState(false);
 
@@ -391,7 +387,6 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     setViewAd(null);
     setViewAdLoading(false);
     setOptionalOpen(false);
-    setPromptGuidelines(project?.prompt_guidelines || '');
   }, [projectId]);
 
   useEffect(() => {
@@ -609,27 +604,6 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     }, 30 * 1000);
     return () => clearInterval(interval);
   }, [activeGens.length, QUEUE_WATCHDOG_MS]);
-
-  // Sync prompt guidelines when project prop changes
-  useEffect(() => {
-    setPromptGuidelines(project?.prompt_guidelines || '');
-  }, [project?.prompt_guidelines]);
-
-  // Auto-save prompt guidelines with debounce (1.5s after typing stops)
-  const handleGuidelinesChange = (value) => {
-    setPromptGuidelines(value);
-    if (guidelinesTimer.current) clearTimeout(guidelinesTimer.current);
-    guidelinesTimer.current = setTimeout(async () => {
-      setGuidelinesSaving(true);
-      try {
-        await api.updateProject(projectId, { prompt_guidelines: value });
-      } catch (err) {
-        console.error('Failed to save prompt guidelines:', err);
-      } finally {
-        setGuidelinesSaving(false);
-      }
-    }, 1500);
-  };
 
   // Prefill was previously populated from the Copywriter tab's Quote Mining flow.
   // That feature has been removed; the ref stays as a template-analysis-race guard in case
@@ -3019,38 +2993,11 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
                 </div>
               </div>
 
-              {/* Prompt Guidelines */}
-              <div className="mb-2">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[13px] font-medium text-ed-ink2 flex items-center gap-1">
-                    Prompt Guidelines
-                    <InfoTooltip text="Rules the AI will enforce on every generated image prompt. Use this to fix recurring issues in your ads." position="right" />
-                  </label>
-                  {guidelinesSaving && (
-                    <span className="text-[11px] text-ed-ink3 flex items-center gap-1">
-                      <div className="w-2.5 h-2.5 rounded-full border border-ed-line border-t-ed-accent/60 animate-spin" />
-                      Saving...
-                    </span>
-                  )}
-                  {!guidelinesSaving && promptGuidelines.trim() && (
-                    <span className="text-[11px] text-ed-green">Saved</span>
-                  )}
-                </div>
-                <p className="text-[11px] text-ed-accent mb-2">
-                  Optional — only needed if you're noticing a recurring pattern in the output you'd like to correct.
-                </p>
-                <textarea
-                  data-testid="prompt-guidelines-input"
-                  value={promptGuidelines}
-                  onChange={e => handleGuidelinesChange(e.target.value)}
-                  rows={2}
-                  className="input-apple !border-ed-line focus:!ring-ed-accent/20 focus:!border-ed-accent resize-none text-[13px]"
-                  placeholder='e.g., "Only show one type of produce at a time — never mix fruits/vegetables in the same image"'
-                />
-                <p className="text-[11px] text-ed-ink3 mt-1">
-                  These rules are automatically applied to every image prompt before generation. Changes auto-save.
-                </p>
-              </div>
+              <PromptGuidelinesEditor
+                projectId={projectId}
+                initialValue={project?.prompt_guidelines || ''}
+                className="mb-2"
+              />
             </div>
           )}
         </div>

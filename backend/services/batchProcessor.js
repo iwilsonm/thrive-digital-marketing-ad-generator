@@ -822,7 +822,9 @@ async function generateBatchPrompts(batch, project, docs, onProgress, options = 
           const promptPackage = normalizeImagePromptPackage(imagePrompts[j], scoringContract);
           let imagePrompt = promptPackage.prompt;
           if (project.prompt_guidelines) {
-            imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines);
+            imagePrompt = await reviewPromptWithGuidelines(imagePrompt, project.prompt_guidelines, {
+              projectId: project.externalId || project.id || batch.project_id,
+            });
           }
 
           const copy = chunk[j];

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from '../api';
 import InfoTooltip from './InfoTooltip';
+import PromptGuidelinesEditor from './PromptGuidelinesEditor';
 import TemplateTagHelp from './TemplateTagHelp';
 import { useToast } from './Toast';
 import BatchRow from './BatchRow';
@@ -1133,13 +1134,11 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
               )}
             </div>
 
-            {/* Prompt Guidelines indicator */}
-            {project?.prompt_guidelines && (
-              <div className="mb-3 p-2.5 bg-ed-accent/5 border border-ed-accent/10 rounded-xl">
-                <p className="text-[11px] font-medium text-ed-accent mb-0.5">Prompt Guidelines Active</p>
-                <p className="text-[10px] text-ed-accent/60 line-clamp-2">{project.prompt_guidelines}</p>
-              </div>
-            )}
+            <PromptGuidelinesEditor
+              projectId={projectId}
+              initialValue={project?.prompt_guidelines || ''}
+              className="mb-3 p-2.5 bg-ed-accent/5 border border-ed-accent/10 rounded-xl"
+            />
 
             {/* Schedule toggle */}
             <div className="flex items-center gap-3 mb-3">
