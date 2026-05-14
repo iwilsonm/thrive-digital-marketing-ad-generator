@@ -312,6 +312,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   // Generation state — supports multiple concurrent generations
   // Each entry: { id, status, message, error, warning, stream }
   const [activeGens, setActiveGens] = useState([]);
+  const [genError, setGenError] = useState('');
   const [genQueueExpanded, setGenQueueExpanded] = useState(true);
   const genIdCounter = useRef(0);
   const singleGenerationQueueRef = useRef(Promise.resolve());
@@ -2814,6 +2815,14 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
                 onChange={e => { if (e.target.files?.length) handleProductFileSelected(e.target.files); }}
                 className="hidden"
               />
+              {genError && (
+                <div
+                  data-testid="adstudio-generation-error"
+                  className="p-3 bg-ed-rust/5 border border-ed-rust/15 rounded-xl text-[12px] text-ed-rust"
+                >
+                  {genError}
+                </div>
+              )}
         </div>
 
         {/* ── OPTIONAL FIELDS (collapsible) ── */}
