@@ -44,12 +44,62 @@ import { getClient as getOpenAIImageClient, getOpenAIImageSize } from './openaiI
 // Batch OCR model — simple text extraction from a generated image. Cheap and vision-capable.
 const BATCH_OCR_MODEL = 'gpt-4.1-mini';
 const BATCH_AD_UUID_NAMESPACE = '9e1c2c75-4b71-4e95-88c7-7605e54a3c03';
+const MAX_REFERENCE_IMAGES = 10;
 
 async function updateBatchHeartbeat(batchId, fields = {}) {
   return updateBatchJob(batchId, {
     ...fields,
     last_heartbeat_at: new Date().toISOString(),
   });
+}
+
+function parseJsonArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeProductImageDataArray(productImageData) {
+  if (!productImageData) return [];
+  const images = Array.isArray(productImageData) ? productImageData : [productImageData];
+  const filtered = images.filter(img => img?.base64);
+  if (filtered.length > MAX_REFERENCE_IMAGES) {
+    throw new Error(`Batch image generation supports up to ${MAX_REFERENCE_IMAGES} reference images.`);
+  }
+  return filtered;
+}
+
+async function loadBatchProductImages(batch) {
+  const storageIds = parseJsonArray(batch.product_image_storageIds);
+  if (storageIds.length > 0) {
+    if (storageIds.length > MAX_REFERENCE_IMAGES) {
+      throw new Error(`Batch image generation supports up to ${MAX_REFERENCE_IMAGES} reference images.`);
+    }
+    const images = [];
+    for (const storageId of storageIds) {
+      try {
+        const imgBuffer = await downloadToBuffer(storageId);
+        images.push({ base64: imgBuffer.toString('base64'), mimeType: 'image/png' });
+      } catch (err) {
+        console.warn(`[BatchProcessor] Could not load product reference ${storageId}: ${err.message}`);
+      }
+    }
+    if (images.length > 0) return images;
+  }
+  if (batch.product_image_storageId) {
+    try {
+      const imgBuffer = await downloadToBuffer(batch.product_image_storageId);
+      return [{ base64: imgBuffer.toString('base64'), mimeType: 'image/png' }];
+    } catch (err) {
+      console.warn(`[BatchProcessor] Could not load product image from Convex: ${err.message}`);
+    }
+  }
+  return [];
 }
 
 /**
@@ -345,25 +395,16 @@ export async function runBatch(batchId, onProgress, options = {}) {
     console.log(`[BatchProcessor] Prompts persisted; preparing ${imageProvider} image batch submission (batch ${batchId.slice(0, 8)})`);
     emit({ type: 'status', status: 'submitting', message: `Submitting to ${imageProvider === 'openai' ? 'OpenAI' : 'Gemini'} Batch API...` });
 
-    // Load product image if configured (from Convex storage)
-    let productImageData = null;
-    if (batch.product_image_storageId) {
-      try {
-        const imgBuffer = await downloadToBuffer(batch.product_image_storageId);
-        productImageData = {
-          base64: imgBuffer.toString('base64'),
-          mimeType: 'image/png'
-        };
-        console.log(`[BatchProcessor] Product image loaded from Convex (${(imgBuffer.length / 1024).toFixed(0)} KB)`);
-      } catch (err) {
-        console.warn(`[BatchProcessor] Could not load product image from Convex: ${err.message}`);
-      }
+    // Load product/reference images if configured (from Convex storage)
+    const productImageDataArray = await loadBatchProductImages(batch);
+    if (productImageDataArray.length > 0) {
+      console.log(`[BatchProcessor] Loaded ${productImageDataArray.length} product/reference image${productImageDataArray.length === 1 ? '' : 's'} from Convex`);
     }
 
     // Phase 2: Submit to provider image Batch API
     await throwIfCancelled();
     if (imageProvider === 'openai') {
-      const openaiBatchId = await submitOpenAIBatch(batchId, prompts, batch.aspect_ratio, project.name);
+      const openaiBatchId = await submitOpenAIBatch(batchId, prompts, batch.aspect_ratio, project.name, productImageDataArray);
       submittedOpenAIBatchId = openaiBatchId;
 
       await throwIfCancelled();
@@ -376,7 +417,7 @@ export async function runBatch(batchId, onProgress, options = {}) {
       emit({ type: 'status', status: 'processing', message: 'Batch submitted to OpenAI. Polling for completion...' });
       console.log(`[BatchProcessor] Batch ${batchId.slice(0, 8)} submitted. OpenAI job: ${openaiBatchId}`);
     } else {
-      const geminiBatchName = await submitGeminiBatch(batchId, prompts, batch.aspect_ratio, project.name, productImageData);
+      const geminiBatchName = await submitGeminiBatch(batchId, prompts, batch.aspect_ratio, project.name, productImageDataArray);
       submittedGeminiBatchName = geminiBatchName;
 
       await throwIfCancelled();
@@ -919,12 +960,13 @@ async function generateBatchPrompts(batch, project, docs, onProgress, options = 
  * @param {Array<{ prompt: string, inspirationTmpPath?: string, inspirationMimeType?: string }>} prompts
  * @param {string} aspectRatio - e.g. '1:1', '9:16'
  * @param {string} projectName - Used in the batch job display name
- * @param {{ base64: string, mimeType: string }|null} [productImageData]
+ * @param {{ base64: string, mimeType: string }|Array<{ base64: string, mimeType: string }>|null} [productImageData]
  * @returns {Promise<string>} Gemini batch job name (for polling)
  */
 async function submitGeminiBatch(batchId, prompts, aspectRatio, projectName, productImageData = null) {
   const ai = await getGeminiClient();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
+  const productImageDataArray = normalizeProductImageDataArray(productImageData);
 
   // Build inline requests — read images from temp files, caching shared paths
   // (Multiple prompts in a chunk share the same inspirationTmpPath)
@@ -949,14 +991,14 @@ async function submitGeminiBatch(batchId, prompts, aspectRatio, projectName, pro
       });
     }
 
-    // Include product image only for prompts that explicitly want it.
-    if (productImageData && promptObj.use_product_reference !== false) {
-      parts.push({
+    // Attach the same reference set to every ad in the batch.
+    if (productImageDataArray.length > 0) {
+      parts.push(...productImageDataArray.map(img => ({
         inlineData: {
-          data: productImageData.base64,
-          mimeType: productImageData.mimeType
+          data: img.base64,
+          mimeType: img.mimeType || 'image/png'
         }
-      });
+      })));
     }
     return {
       contents: [{ parts, role: 'user' }],
@@ -985,18 +1027,38 @@ async function submitGeminiBatch(batchId, prompts, aspectRatio, projectName, pro
   return batchJob.name;
 }
 
-async function submitOpenAIBatch(batchId, prompts, aspectRatio, projectName) {
+async function submitOpenAIBatch(batchId, prompts, aspectRatio, projectName, productImageData = null) {
   const openai = await getOpenAIImageClient();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
   const size = getOpenAIImageSize(aspectRatio || '1:1');
+  const productImageDataArray = normalizeProductImageDataArray(productImageData);
+  const referenceFileIds = [];
+  for (let i = 0; i < productImageDataArray.length; i++) {
+    const img = productImageDataArray[i];
+    const mimeType = img.mimeType || 'image/png';
+    const extension = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png';
+    const file = await toFile(
+      Buffer.from(img.base64, 'base64'),
+      `${projectName || 'project'}_${batchId.slice(0, 8)}_ref_${i + 1}.${extension}`,
+      { type: mimeType }
+    );
+    const uploadedRef = await withRetry(
+      () => openai.files.create({ file, purpose: 'user_data' }),
+      { label: '[OpenAI image reference upload]' }
+    );
+    referenceFileIds.push(uploadedRef.id);
+  }
+  const endpoint = referenceFileIds.length > 0 ? '/v1/images/edits' : '/v1/images/generations';
   const jsonl = prompts.map((promptObj, index) => JSON.stringify({
     custom_id: `ad-${index}`,
     method: 'POST',
-    url: '/v1/images/generations',
+    url: endpoint,
     body: {
       model: 'gpt-image-2',
       prompt: typeof promptObj === 'string' ? promptObj : promptObj.prompt,
-      n: 1,
+      ...(referenceFileIds.length > 0
+        ? { images: referenceFileIds.map(file_id => ({ file_id })) }
+        : { n: 1 }),
       size,
       quality: 'medium',
       output_format: 'jpeg',
@@ -1016,11 +1078,12 @@ async function submitOpenAIBatch(batchId, prompts, aspectRatio, projectName) {
   const batchJob = await withRetry(
     () => openai.batches.create({
       input_file_id: uploaded.id,
-      endpoint: '/v1/images/generations',
+      endpoint,
       completion_window: '24h',
       metadata: {
         batch_id: batchId,
         project_name: String(projectName || '').slice(0, 80),
+        reference_image_count: String(referenceFileIds.length),
       },
     }),
     { label: '[OpenAI image batch create]' }
@@ -1251,14 +1314,8 @@ async function processBatchResults(batchId, job) {
   // Get responses from the batch job
   const responses = job.dest?.inlinedResponses || [];
 
-  // Load product image for single-image retries (if configured)
-  let productImageData = null;
-  if (batch.product_image_storageId) {
-    try {
-      const imgBuffer = await downloadToBuffer(batch.product_image_storageId);
-      productImageData = { base64: imgBuffer.toString('base64'), mimeType: 'image/png' };
-    } catch {}
-  }
+  // Load product/reference images for direct retries (if configured)
+  const productImageDataArray = await loadBatchProductImages(batch);
 
   let savedCount = 0;
   let failedCount = 0;
@@ -1297,7 +1354,7 @@ async function processBatchResults(batchId, job) {
             model: resolvedImageModel,
             prompt: promptText,
             aspectRatio: batch.aspect_ratio || '1:1',
-            productImage: (typeof promptObj === 'object' && promptObj?.use_product_reference === false) ? null : productImageData,
+            productImage: productImageDataArray,
             options: {
               projectId: batch.project_id,
               operation: 'ad_image_generation_batch_retry',

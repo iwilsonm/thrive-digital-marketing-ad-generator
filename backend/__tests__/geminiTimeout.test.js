@@ -81,6 +81,61 @@ describe('Gemini synchronous image attempt timeout', () => {
     })]);
   });
 
+  it('keeps single product image behavior by attaching one inlineData part', async () => {
+    mocks.generateContent.mockResolvedValueOnce(successResponse());
+
+    await generateImage('prompt', '1:1', {
+      base64: Buffer.from('reference').toString('base64'),
+      mimeType: 'image/png',
+    });
+
+    expect(mocks.generateContent.mock.calls[0][0].contents).toEqual([
+      { text: 'prompt' },
+      {
+        inlineData: {
+          data: Buffer.from('reference').toString('base64'),
+          mimeType: 'image/png',
+        },
+      },
+    ]);
+  });
+
+  it('attaches multiple product images as multiple inlineData parts', async () => {
+    mocks.generateContent.mockResolvedValueOnce(successResponse());
+    const refs = [1, 2, 3].map(n => ({
+      base64: Buffer.from(`reference-${n}`).toString('base64'),
+      mimeType: n === 2 ? 'image/jpeg' : 'image/png',
+    }));
+
+    await generateImage('prompt', '1:1', refs);
+
+    const contents = mocks.generateContent.mock.calls[0][0].contents;
+    expect(contents).toHaveLength(4);
+    expect(contents.filter(part => part.inlineData)).toHaveLength(3);
+    expect(contents[2]).toEqual({
+      inlineData: {
+        data: Buffer.from('reference-2').toString('base64'),
+        mimeType: 'image/jpeg',
+      },
+    });
+  });
+
+  it('treats an empty product image array as text-only generation', async () => {
+    mocks.generateContent.mockResolvedValueOnce(successResponse());
+    await generateImage('prompt', '1:1', []);
+    expect(mocks.generateContent.mock.calls[0][0].contents).toBe('prompt');
+  });
+
+  it('rejects more than ten product images with a clear error', async () => {
+    const refs = Array.from({ length: 11 }, (_, index) => ({
+      base64: Buffer.from(`reference-${index}`).toString('base64'),
+      mimeType: 'image/png',
+    }));
+
+    await expect(generateImage('prompt', '1:1', refs)).rejects.toThrow('supports up to 10 reference images');
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+  });
+
   it('aborts a hung attempt at 180 seconds, retries once, and returns diagnostics', async () => {
     vi.useFakeTimers();
     mocks.generateContent

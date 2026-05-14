@@ -16,6 +16,7 @@ export const create = mutation({
     inspiration_image_id: v.optional(v.string()),
     inspiration_image_ids: v.optional(v.string()),
     product_image_storageId: v.optional(v.id("_storage")),
+    product_image_storageIds: v.optional(v.string()),
     image_model: v.optional(v.string()),
     image_provider: v.optional(v.string()),
     openai_batch_job: v.optional(v.nullable(v.string())),
@@ -151,6 +152,7 @@ export const update = mutation({
     aspect_ratio: v.optional(v.string()),
     image_model: v.optional(v.string()),
     image_provider: v.optional(v.string()),
+    product_image_storageIds: v.optional(v.string()),
     used_template_ids: v.optional(v.string()),
     template_tag: v.optional(v.string()),
     pipeline_state: v.optional(v.string()),
@@ -469,6 +471,19 @@ export const remove = mutation({
         await ctx.storage.delete(batch.product_image_storageId);
       } catch {
         // Storage blob may already be deleted or invalid — continue with batch deletion
+      }
+    }
+    if (batch.product_image_storageIds) {
+      try {
+        const ids = JSON.parse(batch.product_image_storageIds);
+        if (Array.isArray(ids)) {
+          for (const id of ids) {
+            if (!id || id === batch.product_image_storageId) continue;
+            try { await ctx.storage.delete(id); } catch {}
+          }
+        }
+      } catch {
+        // Malformed legacy value — continue with batch deletion
       }
     }
     await ctx.db.delete(batch._id);

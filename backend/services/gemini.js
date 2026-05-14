@@ -8,6 +8,7 @@ let client = null;
 let lastApiKey = null;
 const GEMINI_IMAGE_ATTEMPT_TIMEOUT_MS = 180 * 1000;
 const GEMINI_IMAGE_MAX_ATTEMPTS = 2;
+const MAX_REFERENCE_IMAGES = 10;
 const NO_IMAGE_MESSAGE = "Gemini returned a response without an image. This usually means the prompt was refused or hit a content filter. Check the ad's diagnostic detail for finish reason and safety ratings, or try a different prompt.";
 const GEMINI_BILLING_URL = 'https://aistudio.google.com/app/billing';
 
@@ -208,6 +209,16 @@ function extractGeminiImage(response) {
   return { imageBuffer, mimeType, textResponse };
 }
 
+function normalizeProductImages(productImage) {
+  if (!productImage) return [];
+  const images = Array.isArray(productImage) ? productImage : [productImage];
+  const filtered = images.filter(img => img?.base64);
+  if (filtered.length > MAX_REFERENCE_IMAGES) {
+    throw new Error(`Image generation supports up to ${MAX_REFERENCE_IMAGES} reference images. Remove ${filtered.length - MAX_REFERENCE_IMAGES} image${filtered.length - MAX_REFERENCE_IMAGES === 1 ? '' : 's'} and try again.`);
+  }
+  return filtered;
+}
+
 async function generateContentWithAttemptTimeout(ai, params, timeoutMs, cancelSignal = null) {
   const timeoutController = new AbortController();
   const abortSignal = combineAbortSignals([timeoutController.signal, cancelSignal]);
@@ -269,15 +280,16 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
 
   try {
     let contents;
-    if (productImage) {
+    const productImages = normalizeProductImages(productImage);
+    if (productImages.length > 0) {
       contents = [
         { text: prompt },
-        {
+        ...productImages.map(img => ({
           inlineData: {
-            data: productImage.base64,
-            mimeType: productImage.mimeType
+            data: img.base64,
+            mimeType: img.mimeType || 'image/png'
           }
-        }
+        }))
       ];
     } else {
       contents = prompt;

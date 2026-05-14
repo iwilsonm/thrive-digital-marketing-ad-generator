@@ -17,6 +17,29 @@ const loadScheduledBatches = () => [];
 
 const router = Router();
 router.use(requireAuth);
+const MAX_REFERENCE_IMAGES = 10;
+
+function normalizeProductImages(body) {
+  const incoming = Array.isArray(body.product_images)
+    ? body.product_images
+    : (body.product_images ? [body.product_images] : []);
+  const normalized = incoming
+    .map(img => ({
+      base64: img?.base64 || img?.image || null,
+      mimeType: img?.mimeType || img?.mime_type || img?.mime || 'image/png',
+    }))
+    .filter(img => img.base64);
+  if (normalized.length > MAX_REFERENCE_IMAGES) {
+    const err = new Error(`Use up to ${MAX_REFERENCE_IMAGES} reference images per batch.`);
+    err.status = 400;
+    throw err;
+  }
+  if (normalized.length > 0) return normalized;
+  if (body.product_image && body.product_image_mime) {
+    return [{ base64: body.product_image, mimeType: body.product_image_mime }];
+  }
+  return [];
+}
 
 /**
  * POST /:projectId/batches — Create a new batch job
@@ -37,6 +60,8 @@ router.post('/:projectId/batches', async (req, res) => {
     inspiration_image_ids,     // JSON string array of drive template IDs (multi-select)
     product_image,
     product_image_mime,
+    product_images,
+    product_image_storageIds,
     skip_product_image,
     image_model,
     scheduled = false,
@@ -65,21 +90,50 @@ router.post('/:projectId/batches', async (req, res) => {
   const id = uuidv4();
   const resolvedImageModel = resolveImageModel(image_model);
   const imageProvider = getImageProvider(resolvedImageModel);
+  let productImages;
+  try {
+    productImages = normalizeProductImages({ ...req.body, product_images });
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
 
   // Upload product image to Convex storage if provided, else use project-level image
   let productImageStorageId = undefined;
+  let productImageStorageIds = undefined;
   if (skip_product_image) {
     // Explicitly skip product image (user opted out)
     productImageStorageId = undefined;
-  } else if (product_image && product_image_mime) {
-    const buffer = Buffer.from(product_image, 'base64');
-    productImageStorageId = await uploadBuffer(buffer, product_image_mime);
+  } else if (Array.isArray(product_image_storageIds) && product_image_storageIds.length > 0) {
+    if (product_image_storageIds.length > MAX_REFERENCE_IMAGES) {
+      return res.status(400).json({ error: `Use up to ${MAX_REFERENCE_IMAGES} reference images per batch.` });
+    }
+    productImageStorageIds = product_image_storageIds;
+    productImageStorageId = productImageStorageIds[0];
+  } else if (typeof product_image_storageIds === 'string' && product_image_storageIds.trim()) {
+    try {
+      const parsed = JSON.parse(product_image_storageIds);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (parsed.length > MAX_REFERENCE_IMAGES) {
+          return res.status(400).json({ error: `Use up to ${MAX_REFERENCE_IMAGES} reference images per batch.` });
+        }
+        productImageStorageIds = parsed;
+        productImageStorageId = productImageStorageIds[0];
+      }
+    } catch {}
+  } else if (productImages.length > 0) {
+    productImageStorageIds = [];
+    for (const img of productImages) {
+      const buffer = Buffer.from(img.base64, 'base64');
+      productImageStorageIds.push(await uploadBuffer(buffer, img.mimeType));
+    }
+    productImageStorageId = productImageStorageIds[0];
   } else if (project.product_image_storageId) {
     // Copy the project's product image into a new storage blob owned by THIS batch.
     // Sharing the storage ID would mean batchJobs.remove() deletes the project's image
     // when the batch is cleaned up, breaking the project's product image silently.
     try {
       productImageStorageId = await copyStorageBlob(project.product_image_storageId);
+      productImageStorageIds = [productImageStorageId];
     } catch (err) {
       console.warn(`[batches] Project product image storageId is dead, proceeding without: ${err.message}`);
       productImageStorageId = undefined;
@@ -102,6 +156,7 @@ router.post('/:projectId/batches', async (req, res) => {
       inspiration_image_id: inspiration_image_id || null,
       inspiration_image_ids: inspiration_image_ids || null,
       product_image_storageId: productImageStorageId,
+      product_image_storageIds: productImageStorageIds?.length ? JSON.stringify(productImageStorageIds) : undefined,
       scheduled: !!scheduled,
       schedule_cron: schedule_cron || null,
       status: shouldQueueNow ? 'queued' : 'pending',

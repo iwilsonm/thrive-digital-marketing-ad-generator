@@ -15,6 +15,23 @@ function makeRenderReference(base64, mimeType, role) {
   if (!base64 || !mimeType) return null;
   return { base64, mimeType, role };
 }
+
+function normalizeProductImageInputs(productImages, productImageBase64, productImageMimeType) {
+  const inputs = Array.isArray(productImages)
+    ? productImages
+    : (productImages ? [productImages] : []);
+  const normalized = inputs
+    .map(img => ({
+      base64: img?.base64 || img?.image || null,
+      mimeType: img?.mimeType || img?.mime_type || img?.mime || 'image/png',
+    }))
+    .filter(img => img.base64);
+  if (normalized.length > 0) return normalized;
+  if (productImageBase64 && productImageMimeType) {
+    return [{ base64: productImageBase64, mimeType: productImageMimeType }];
+  }
+  return [];
+}
 import { withHeavyLLMLimit } from './rateLimiter.js';
 import {
   getProject, getLatestDoc, uploadBuffer, downloadToBuffer,
@@ -612,7 +629,7 @@ export async function selectTemplateImage(templateImageId) {
  * @returns {Promise<object>} The completed ad creative record
  */
 export async function generateAd(projectId, options = {}) {
-  const { angle, aspectRatio = '1:1', imageModel, inspirationImageId, templateTag, uploadedImageBase64, uploadedImageMimeType, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent, cancelSignal } = options;
+  const { angle, aspectRatio = '1:1', imageModel, inspirationImageId, templateTag, uploadedImageBase64, uploadedImageMimeType, productImages, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent, cancelSignal } = options;
 
   const emit = (event) => {
     if (onEvent) {
@@ -673,7 +690,8 @@ export async function generateAd(projectId, options = {}) {
     }
 
     // GPT-5.2 Messages 1-2: Rate-limited to prevent TPM overload
-    const hasProductImage = !!(productImageBase64 && productImageMimeType);
+    const productImageRefs = normalizeProductImageInputs(productImages, productImageBase64, productImageMimeType);
+    const hasProductImage = productImageRefs.length > 0;
     let renderReferenceImages = [];
 
     let imagePrompt = await withHeavyLLMLimit(async () => {
@@ -703,7 +721,7 @@ export async function generateAd(projectId, options = {}) {
       const inspirationBase64 = readImageBase64(inspiration);
       renderReferenceImages = [
         makeRenderReference(inspirationBase64, inspiration.mimeType, 'layout'),
-        hasProductImage ? makeRenderReference(productImageBase64, productImageMimeType, 'product') : null,
+        ...productImageRefs.map(img => makeRenderReference(img.base64, img.mimeType, 'product')),
       ].filter(Boolean);
 
       let prompt;
@@ -713,7 +731,7 @@ export async function generateAd(projectId, options = {}) {
           imageRequestText_inner,
           [
             { base64: inspirationBase64, mimeType: inspiration.mimeType },
-            { base64: productImageBase64, mimeType: productImageMimeType }
+            ...productImageRefs
           ],
           'gpt-5.2',
           { operation: 'ad_generation_mode1', projectId, signal: cancelSignal }
@@ -769,9 +787,7 @@ export async function generateAd(projectId, options = {}) {
     }).catch(() => {});
 
     // Generate image, save, upload to Drive (shared helper)
-    const productImage = hasProductImage
-      ? { base64: productImageBase64, mimeType: productImageMimeType }
-      : null;
+    const productImage = hasProductImage ? productImageRefs : null;
     const ad = await generateAndSaveImage({
       adId, projectId, project, imagePrompt, aspectRatio, angle,
       productImage, imageModel, renderReferenceImages,
@@ -885,7 +901,7 @@ async function generateAndSaveImage({ adId, projectId, project, imagePrompt, asp
  * @returns {Promise<object>} The completed ad creative record
  */
 export async function generateAdMode2(projectId, options = {}) {
-  const { templateImageId, angle, aspectRatio = '1:1', imageModel, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent, cancelSignal } = options;
+  const { templateImageId, angle, aspectRatio = '1:1', imageModel, productImages, productImageBase64, productImageMimeType, headline, bodyCopy, onEvent, cancelSignal } = options;
 
   const emit = (event) => {
     if (onEvent) {
@@ -939,7 +955,8 @@ export async function generateAdMode2(projectId, options = {}) {
     }
 
     // GPT-5.2 Messages 1-2: Rate-limited to prevent TPM overload
-    const hasProductImage = !!(productImageBase64 && productImageMimeType);
+    const productImageRefs = normalizeProductImageInputs(productImages, productImageBase64, productImageMimeType);
+    const hasProductImage = productImageRefs.length > 0;
     let renderReferenceImages = [];
 
     let imagePrompt = await withHeavyLLMLimit(async () => {
@@ -969,7 +986,7 @@ export async function generateAdMode2(projectId, options = {}) {
       const templateBase64 = readImageBase64(template);
       renderReferenceImages = [
         makeRenderReference(templateBase64, template.mimeType, 'layout'),
-        hasProductImage ? makeRenderReference(productImageBase64, productImageMimeType, 'product') : null,
+        ...productImageRefs.map(img => makeRenderReference(img.base64, img.mimeType, 'product')),
       ].filter(Boolean);
 
       let prompt;
@@ -979,7 +996,7 @@ export async function generateAdMode2(projectId, options = {}) {
           imageRequestText_inner,
           [
             { base64: templateBase64, mimeType: template.mimeType },
-            { base64: productImageBase64, mimeType: productImageMimeType }
+            ...productImageRefs
           ],
           'gpt-5.2',
           { operation: 'ad_generation_mode2', projectId, signal: cancelSignal }
@@ -1035,9 +1052,7 @@ export async function generateAdMode2(projectId, options = {}) {
     }).catch(() => {});
 
     // Generate image, save, upload to Drive (shared helper)
-    const productImage = hasProductImage
-      ? { base64: productImageBase64, mimeType: productImageMimeType }
-      : null;
+    const productImage = hasProductImage ? productImageRefs : null;
     const ad = await generateAndSaveImage({
       adId, projectId, project, imagePrompt, aspectRatio, angle,
       productImage, imageModel, renderReferenceImages,
@@ -2565,6 +2580,7 @@ export async function regenerateImageOnly(projectId, options = {}) {
     aspectRatio = '1:1',
     imageModel,
     parentAdId,
+    productImages,
     productImageBase64,
     productImageMimeType,
     referenceImageBase64,
@@ -2655,14 +2671,13 @@ export async function regenerateImageOnly(projectId, options = {}) {
       }
     }
 
-    const hasProductImage = !!(productImageBase64 && productImageMimeType);
-    const productImage = hasProductImage
-      ? { base64: productImageBase64, mimeType: productImageMimeType }
-      : null;
+    const productImageRefs = normalizeProductImageInputs(productImages, productImageBase64, productImageMimeType);
+    const hasProductImage = productImageRefs.length > 0;
+    const productImage = hasProductImage ? productImageRefs : null;
     const hasReferenceImage = !!(referenceImageBase64 && referenceImageMimeType);
     const renderReferenceImages = [
       hasReferenceImage ? makeRenderReference(referenceImageBase64, referenceImageMimeType, 'layout') : null,
-      hasProductImage ? makeRenderReference(productImageBase64, productImageMimeType, 'product') : null,
+      ...productImageRefs.map(img => makeRenderReference(img.base64, img.mimeType, 'product')),
     ].filter(Boolean);
 
     const ad = await generateAndSaveImage({

@@ -92,10 +92,21 @@ vi.mock('../services/adGenerator.js', () => ({
 // Mock Gemini (image generation)
 const mockGenerateImage = vi.fn();
 const mockGetClient = vi.fn();
+const mockOpenAIImageClient = vi.fn();
+const mockOpenAIToFile = vi.fn(async (buffer, name, options) => ({ buffer, name, options }));
 
 vi.mock('../services/gemini.js', () => ({
   generateImage: (...args) => mockGenerateImage(...args),
   getClient: (...args) => mockGetClient(...args),
+}));
+
+vi.mock('../services/openaiImage.js', () => ({
+  getClient: (...args) => mockOpenAIImageClient(...args),
+  getOpenAIImageSize: vi.fn(() => '1024x1024'),
+}));
+
+vi.mock('openai', () => ({
+  toFile: (...args) => mockOpenAIToFile(...args),
 }));
 
 // Mock cost tracker
@@ -433,6 +444,146 @@ describe('batch pipeline', () => {
       }));
       expect(mockUpdateBatchJob).toHaveBeenCalledWith('batch-001', expect.objectContaining({
         gemini_batch_job: 'batches/path-b-test',
+        status: 'processing',
+      }));
+    });
+
+    it('attaches all stored product references to Gemini batch prompts', async () => {
+      const createGeminiBatch = vi.fn().mockResolvedValue({ name: 'batches/multi-ref-gemini' });
+      mockGetBatchJob.mockResolvedValue(makeBatchJob({
+        batch_size: 1,
+        product_image_storageIds: JSON.stringify(['ref-1', 'ref-2', 'ref-3']),
+        image_model: 'nano-banana-2',
+        image_provider: 'gemini',
+      }));
+      mockGetProject.mockResolvedValue(makeProject());
+      mockGetLatestDoc.mockImplementation((projId, docType) => Promise.resolve(makeDoc(docType)));
+      mockDownloadToBuffer.mockImplementation(storageId => Promise.resolve(Buffer.from(`image-${storageId}`)));
+      mockExtractBrief.mockResolvedValue('brief');
+      mockGenerateHeadlines.mockResolvedValue({
+        headlines: [{
+          rank: 1,
+          headline: 'Christian Counseling Webinar Explains Your Options',
+          hook_lane: 'direct_offer',
+          sub_angle: 'options',
+          scene_anchor: 'feed decision',
+          core_claim: 'compare paths',
+          target_symptom: 'unclear requirements',
+          emotional_entry: 'confusion',
+          desired_belief_shift: 'I know my next step.',
+          opening_pattern: 'direct_question',
+          average_score: 9,
+        }],
+      });
+      mockGenerateBodyCopies.mockResolvedValue([{
+        headline: 'Christian Counseling Webinar Explains Your Options',
+        body_copy: 'Compare licensure, ministry, and certificate paths before you choose.',
+        hook_lane: 'direct_offer',
+        sub_angle: 'options',
+        scene_anchor: 'feed decision',
+        core_claim: 'compare paths',
+        target_symptom: 'unclear requirements',
+        emotional_entry: 'confusion',
+        desired_belief_shift: 'I know my next step.',
+        opening_pattern: 'direct_question',
+      }]);
+      mockSelectInspirationImage.mockResolvedValue({ fileId: null, tmpPath: null, mimeType: 'image/jpeg' });
+      mockGenerateImagePromptsBatch.mockResolvedValue([{
+        prompt: 'Create a clear webinar ad.',
+        headline: 'Christian Counseling Webinar Explains Your Options',
+        body_copy: 'Compare paths.',
+      }]);
+      mockGetClient.mockResolvedValue({ batches: { create: createGeminiBatch } });
+      mockUpdateBatchJob.mockResolvedValue();
+
+      const { runBatch } = await import('../services/batchProcessor.js');
+      await expect(runBatch('batch-001')).resolves.toBeUndefined();
+
+      const request = createGeminiBatch.mock.calls[0][0].src[0];
+      const inlineParts = request.contents[0].parts.filter(part => part.inlineData);
+      expect(inlineParts).toHaveLength(3);
+      expect(inlineParts.map(part => part.inlineData.data)).toEqual([
+        Buffer.from('image-ref-1').toString('base64'),
+        Buffer.from('image-ref-2').toString('base64'),
+        Buffer.from('image-ref-3').toString('base64'),
+      ]);
+    });
+
+    it('uses OpenAI image edits batch endpoint with file_id references when references exist', async () => {
+      const openaiClient = {
+        files: {
+          create: vi.fn()
+            .mockResolvedValueOnce({ id: 'file-ref-1' })
+            .mockResolvedValueOnce({ id: 'file-ref-2' })
+            .mockResolvedValueOnce({ id: 'file-batch-jsonl' }),
+        },
+        batches: {
+          create: vi.fn().mockResolvedValue({ id: 'batch-openai-refs' }),
+        },
+      };
+      mockOpenAIImageClient.mockResolvedValue(openaiClient);
+      mockGetBatchJob.mockResolvedValue(makeBatchJob({
+        batch_size: 1,
+        product_image_storageIds: JSON.stringify(['ref-1', 'ref-2']),
+        image_model: 'gpt-image-2',
+        image_provider: 'openai',
+      }));
+      mockGetProject.mockResolvedValue(makeProject());
+      mockGetLatestDoc.mockImplementation((projId, docType) => Promise.resolve(makeDoc(docType)));
+      mockDownloadToBuffer.mockImplementation(storageId => Promise.resolve(Buffer.from(`image-${storageId}`)));
+      mockExtractBrief.mockResolvedValue('brief');
+      mockGenerateHeadlines.mockResolvedValue({
+        headlines: [{
+          rank: 1,
+          headline: 'Free Webinar Explains Christian Counseling Paths',
+          hook_lane: 'direct_offer',
+          sub_angle: 'paths',
+          scene_anchor: 'feed decision',
+          core_claim: 'compare paths',
+          target_symptom: 'unclear requirements',
+          emotional_entry: 'confusion',
+          desired_belief_shift: 'I know my next step.',
+          opening_pattern: 'direct_question',
+          average_score: 9,
+        }],
+      });
+      mockGenerateBodyCopies.mockResolvedValue([{
+        headline: 'Free Webinar Explains Christian Counseling Paths',
+        body_copy: 'Compare the paths before you choose.',
+        hook_lane: 'direct_offer',
+        sub_angle: 'paths',
+        scene_anchor: 'feed decision',
+        core_claim: 'compare paths',
+        target_symptom: 'unclear requirements',
+        emotional_entry: 'confusion',
+        desired_belief_shift: 'I know my next step.',
+        opening_pattern: 'direct_question',
+      }]);
+      mockSelectInspirationImage.mockResolvedValue({ fileId: null, tmpPath: null, mimeType: 'image/jpeg' });
+      mockGenerateImagePromptsBatch.mockResolvedValue([{
+        prompt: 'Create a clear webinar ad.',
+        headline: 'Free Webinar Explains Christian Counseling Paths',
+        body_copy: 'Compare paths.',
+      }]);
+      mockUpdateBatchJob.mockResolvedValue();
+
+      const { runBatch } = await import('../services/batchProcessor.js');
+      await expect(runBatch('batch-001')).resolves.toBeUndefined();
+
+      expect(openaiClient.files.create).toHaveBeenNthCalledWith(1, expect.objectContaining({ purpose: 'user_data' }));
+      expect(openaiClient.files.create).toHaveBeenNthCalledWith(2, expect.objectContaining({ purpose: 'user_data' }));
+      expect(openaiClient.batches.create).toHaveBeenCalledWith(expect.objectContaining({
+        endpoint: '/v1/images/edits',
+        input_file_id: 'file-batch-jsonl',
+      }));
+      const jsonlFile = mockOpenAIToFile.mock.calls.find(([, name]) => String(name).endsWith('.jsonl'));
+      const jsonl = jsonlFile[0].toString('utf8').trim();
+      const line = JSON.parse(jsonl);
+      expect(line.url).toBe('/v1/images/edits');
+      expect(line.body.images).toEqual([{ file_id: 'file-ref-1' }, { file_id: 'file-ref-2' }]);
+      expect(line.body.n).toBeUndefined();
+      expect(mockUpdateBatchJob).toHaveBeenCalledWith('batch-001', expect.objectContaining({
+        openai_batch_job: 'batch-openai-refs',
         status: 'processing',
       }));
     });

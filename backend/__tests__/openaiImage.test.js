@@ -55,6 +55,15 @@ describe('openaiImage generateImage', () => {
         input_tokens_details: { text_tokens: 10, image_tokens: 0 },
       },
     });
+    mocks.imagesEdit.mockResolvedValue({
+      data: [{ b64_json: Buffer.from('edited-image').toString('base64') }],
+      usage: {
+        input_tokens: 30,
+        output_tokens: 20,
+        total_tokens: 50,
+        input_tokens_details: { text_tokens: 10, image_tokens: 20 },
+      },
+    });
   });
 
   afterEach(() => {
@@ -90,6 +99,58 @@ describe('openaiImage generateImage', () => {
       quality: 'low',
       size: '1024x1024',
     }), expect.any(Object));
+  });
+
+  it('keeps single product image behavior by routing through images.edit with one file', async () => {
+    await generateImage('prompt', '1:1', {
+      base64: Buffer.from('reference').toString('base64'),
+      mimeType: 'image/png',
+    });
+
+    expect(mocks.imagesGenerate).not.toHaveBeenCalled();
+    expect(mocks.toFile).toHaveBeenCalledTimes(1);
+    expect(mocks.imagesEdit).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gpt-image-2',
+      prompt: 'prompt',
+      image: [expect.objectContaining({ name: 'reference-1.png' })],
+      output_format: 'jpeg',
+    }), expect.any(Object));
+  });
+
+  it('passes multiple product images to images.edit as an image array', async () => {
+    const refs = [1, 2, 3].map(n => ({
+      base64: Buffer.from(`reference-${n}`).toString('base64'),
+      mimeType: n === 2 ? 'image/jpeg' : 'image/png',
+    }));
+
+    await generateImage('prompt', '1:1', refs);
+
+    expect(mocks.imagesGenerate).not.toHaveBeenCalled();
+    expect(mocks.toFile).toHaveBeenCalledTimes(3);
+    expect(mocks.imagesEdit).toHaveBeenCalledWith(expect.objectContaining({
+      image: [
+        expect.objectContaining({ name: 'reference-1.png' }),
+        expect.objectContaining({ name: 'reference-2.jpg' }),
+        expect.objectContaining({ name: 'reference-3.png' }),
+      ],
+    }), expect.any(Object));
+  });
+
+  it('treats an empty product image array as text-only generation', async () => {
+    await generateImage('prompt', '1:1', []);
+    expect(mocks.imagesGenerate).toHaveBeenCalledTimes(1);
+    expect(mocks.imagesEdit).not.toHaveBeenCalled();
+  });
+
+  it('rejects more than ten product images with a clear error', async () => {
+    const refs = Array.from({ length: 11 }, (_, index) => ({
+      base64: Buffer.from(`reference-${index}`).toString('base64'),
+      mimeType: 'image/png',
+    }));
+
+    await expect(generateImage('prompt', '1:1', refs)).rejects.toThrow('supports up to 10 reference images');
+    expect(mocks.imagesGenerate).not.toHaveBeenCalled();
+    expect(mocks.imagesEdit).not.toHaveBeenCalled();
   });
 
   it('fails fast with BILLING_EXHAUSTED metadata for account quota errors', async () => {

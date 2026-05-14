@@ -220,6 +220,7 @@ export default defineSchema({
     inspiration_image_id: v.optional(v.string()),
     inspiration_image_ids: v.optional(v.string()),    // JSON array of drive template IDs (multi-select)
     product_image_storageId: v.optional(v.id("_storage")),
+    product_image_storageIds: v.optional(v.string()),  // JSON array of reference image storage IDs
     image_model: v.optional(v.string()),              // Image model selected for this batch (default "nano-banana-2")
     image_provider: v.optional(v.string()),           // "gemini" | "openai" derived from image_model at creation time
     gemini_batch_job: v.optional(v.nullable(v.string())),

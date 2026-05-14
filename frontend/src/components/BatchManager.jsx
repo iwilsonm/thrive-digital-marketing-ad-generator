@@ -127,14 +127,14 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
   }, []);
 
   // Upload one-off template
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [uploadedPreview, setUploadedPreview] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedPreviews, setUploadedPreviews] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   // Product image for batch
-  const [batchProductFile, setBatchProductFile] = useState(null);
-  const [batchProductPreview, setBatchProductPreview] = useState(null);
+  const [batchProductFiles, setBatchProductFiles] = useState([]);
+  const [batchProductPreviews, setBatchProductPreviews] = useState([]);
   const [batchProductDragOver, setBatchProductDragOver] = useState(false);
   const [skipProductImage, setSkipProductImage] = useState(false);
   const batchProductInputRef = useRef(null);
@@ -206,16 +206,25 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
   };
 
   // File upload handlers for Manual Upload
-  const handleFileSelected = useCallback((file) => {
-    if (!file) return;
+  const handleFileSelected = useCallback((files) => {
+    const selected = Array.from(files || []).filter(Boolean);
+    if (selected.length === 0) return;
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) {
+    const invalid = selected.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
+    if (invalid) {
+      const ext = '.' + invalid.name.split('.').pop().toLowerCase();
       setCreateError(`File type ${ext} not supported. Use JPG, PNG, WebP, or GIF.`);
       return;
     }
-    setUploadedFile(file);
-    setUploadedPreview(URL.createObjectURL(file));
+    if (selected.length > 10) {
+      setCreateError('Use up to 10 images per upload.');
+      return;
+    }
+    setUploadedPreviews(prev => {
+      prev.forEach(item => URL.revokeObjectURL(item.url));
+      return selected.map(file => ({ file, url: URL.createObjectURL(file) }));
+    });
+    setUploadedFiles(selected);
     setTemplateSource(TEMPLATE_UPLOAD);
     setCreateError('');
   }, []);
@@ -224,8 +233,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) handleFileSelected(file);
+    if (e.dataTransfer?.files?.length) handleFileSelected(e.dataTransfer.files);
   }, [handleFileSelected]);
 
   const handleDragOver = useCallback((e) => {
@@ -241,37 +249,45 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
   }, []);
 
   const clearUploadedImage = () => {
-    setUploadedFile(null);
-    if (uploadedPreview) URL.revokeObjectURL(uploadedPreview);
-    setUploadedPreview(null);
+    setUploadedFiles([]);
+    uploadedPreviews.forEach(item => URL.revokeObjectURL(item.url));
+    setUploadedPreviews([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Product image handlers
-  const handleBatchProductSelected = useCallback((file) => {
-    if (!file) return;
+  const handleBatchProductSelected = useCallback((files) => {
+    const selected = Array.from(files || []).filter(Boolean);
+    if (selected.length === 0) return;
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) {
+    const invalid = selected.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
+    if (invalid) {
+      const ext = '.' + invalid.name.split('.').pop().toLowerCase();
       setCreateError(`File type ${ext} not supported. Use JPG, PNG, WebP, or GIF.`);
       return;
     }
-    setBatchProductFile(file);
-    setBatchProductPreview(URL.createObjectURL(file));
+    if (selected.length > 10) {
+      setCreateError('Use up to 10 reference images per batch.');
+      return;
+    }
+    setBatchProductPreviews(prev => {
+      prev.forEach(item => URL.revokeObjectURL(item.url));
+      return selected.map(file => ({ file, url: URL.createObjectURL(file) }));
+    });
+    setBatchProductFiles(selected);
   }, []);
 
   const handleBatchProductDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setBatchProductDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) handleBatchProductSelected(file);
+    if (e.dataTransfer?.files?.length) handleBatchProductSelected(e.dataTransfer.files);
   }, [handleBatchProductSelected]);
 
   const clearBatchProductImage = () => {
-    setBatchProductFile(null);
-    if (batchProductPreview) URL.revokeObjectURL(batchProductPreview);
-    setBatchProductPreview(null);
+    setBatchProductFiles([]);
+    batchProductPreviews.forEach(item => URL.revokeObjectURL(item.url));
+    setBatchProductPreviews([]);
     if (batchProductInputRef.current) batchProductInputRef.current.value = '';
   };
 
@@ -282,6 +298,15 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+
+  const filesToProductImages = async (files) => {
+    const selected = Array.from(files || []).filter(Boolean);
+    if (selected.length === 0) return [];
+    return Promise.all(selected.map(async file => ({
+      base64: await fileToBase64(file),
+      mimeType: file.type || 'image/png',
+    })));
+  };
 
   // Build batch config based on current template selection
   const buildBatchConfig = () => {
@@ -329,8 +354,10 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     if (templateSource === TEMPLATE_SELECT && selectedTemplates.length > 0) {
       return `${selectedTemplates.length} template${selectedTemplates.length !== 1 ? 's' : ''} selected`;
     }
-    if (templateSource === TEMPLATE_UPLOAD && uploadedFile) {
-      return `Upload: ${uploadedFile.name.slice(0, 15)}`;
+    if (templateSource === TEMPLATE_UPLOAD && uploadedFiles.length > 0) {
+      return uploadedFiles.length === 1
+        ? `Upload: ${uploadedFiles[0].name.slice(0, 15)}`
+        : `${uploadedFiles.length} uploaded templates`;
     }
     return 'Random';
   };
@@ -405,7 +432,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
 
   const handleCreate = async () => {
     // Validate template selection
-    if (templateSource === TEMPLATE_UPLOAD && !uploadedFile) {
+    if (templateSource === TEMPLATE_UPLOAD && uploadedFiles.length === 0) {
       setCreateError('Please upload a template image or switch to "Random Template".');
       return;
     }
@@ -421,17 +448,24 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
       const config = buildBatchConfig();
 
       // If manual upload, we need to upload the template first, then use mode2
-      if (templateSource === TEMPLATE_UPLOAD && uploadedFile) {
-        const uploaded = await api.uploadTemplate(projectId, uploadedFile, `Batch upload - ${uploadedFile.name}`);
+      if (templateSource === TEMPLATE_UPLOAD && uploadedFiles.length > 0) {
+        const uploadedResults = [];
+        for (const file of uploadedFiles) {
+          uploadedResults.push(await api.uploadTemplate(projectId, file, `Batch upload - ${file.name}`));
+        }
+        const uploadedIds = uploadedResults.map(uploaded => uploaded.template?.id || uploaded.id).filter(Boolean);
         config.generation_mode = 'mode2';
-        config.template_image_id = uploaded.template?.id || uploaded.id;
+        if (uploadedIds.length === 1) config.template_image_id = uploadedIds[0];
+        else config.template_image_ids = JSON.stringify(uploadedIds);
       }
 
-      // Attach product image if provided
-      if (batchProductFile) {
-        const base64 = await fileToBase64(batchProductFile);
-        config.product_image = base64;
-        config.product_image_mime = batchProductFile.type || 'image/png';
+      // Attach product/reference images if provided
+      if (batchProductFiles.length > 0) {
+        config.product_images = await filesToProductImages(batchProductFiles);
+        if (config.product_images[0]) {
+          config.product_image = config.product_images[0].base64;
+          config.product_image_mime = config.product_images[0].mimeType;
+        }
       }
 
       // Skip product image if toggled
@@ -445,6 +479,8 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
       // Reset form
       setBatchAngle('');
       setIsScheduled(false);
+      clearUploadedImage();
+      clearBatchProductImage();
       await loadBatches(true);
     } catch (err) {
       setCreateError(err.message);
@@ -519,7 +555,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
   // Queue handlers
   const handleAddToQueue = () => {
     // Validate template selection
-    if (templateSource === TEMPLATE_UPLOAD && !uploadedFile) {
+    if (templateSource === TEMPLATE_UPLOAD && uploadedFiles.length === 0) {
       setCreateError('Please upload a template image or switch to "Random Template".');
       return;
     }
@@ -541,12 +577,16 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
       templateLabel: getTemplateLabel(),
       templateTag,
       selectedTemplates: selectedTemplates.length > 0 ? [...selectedTemplates] : [],
-      uploadedFile: templateSource === TEMPLATE_UPLOAD ? uploadedFile : null
+      uploadedFiles: templateSource === TEMPLATE_UPLOAD ? [...uploadedFiles] : [],
+      batchProductFiles: batchProductFiles.length > 0 ? [...batchProductFiles] : [],
+      skipProductImage
     };
     setQueue(prev => [...prev, config]);
     setBatchAngle('');
     setIsScheduled(false);
     setImageModel(DEFAULT_IMAGE_MODEL);
+    clearUploadedImage();
+    clearBatchProductImage();
   };
 
   const handleRemoveFromQueue = (tempId) => {
@@ -586,7 +626,18 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
 
     if (item.templateSource) setTemplateSource(item.templateSource);
     setTemplateTag(item.templateTag || '');
-    if (item.selectedTemplate) setSelectedTemplates(Array.isArray(item.selectedTemplate) ? item.selectedTemplate : [item.selectedTemplate]);
+    setSelectedTemplates(Array.isArray(item.selectedTemplates) ? item.selectedTemplates : []);
+    setSkipProductImage(!!item.skipProductImage);
+    setUploadedFiles(item.uploadedFiles || []);
+    setUploadedPreviews(prev => {
+      prev.forEach(entry => URL.revokeObjectURL(entry.url));
+      return (item.uploadedFiles || []).map(file => ({ file, url: URL.createObjectURL(file) }));
+    });
+    setBatchProductFiles(item.batchProductFiles || []);
+    setBatchProductPreviews(prev => {
+      prev.forEach(entry => URL.revokeObjectURL(entry.url));
+      return (item.batchProductFiles || []).map(file => ({ file, url: URL.createObjectURL(file) }));
+    });
 
     // Remove from queue
     setQueue(prev => prev.filter(q => q.id !== tempId));
@@ -611,25 +662,44 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
           run_immediately: !config.scheduled
         };
 
-        if (config.templateSource === TEMPLATE_SELECT && config.selectedTemplate) {
-          if (config.selectedTemplate.source === 'uploaded') {
+        if (config.templateSource === TEMPLATE_SELECT && config.selectedTemplates?.length > 0) {
+          const driveIds = config.selectedTemplates.filter(t => t.source === 'drive').map(t => t.id);
+          const uploadedIds = config.selectedTemplates.filter(t => t.source === 'uploaded').map(t => t.id);
+          if (config.selectedTemplates.length === 1 && uploadedIds.length === 1) {
             batchConfig.generation_mode = 'mode2';
-            batchConfig.template_image_id = config.selectedTemplate.id;
-          } else {
+            batchConfig.template_image_id = uploadedIds[0];
+          } else if (config.selectedTemplates.length === 1 && driveIds.length === 1) {
             batchConfig.generation_mode = 'mode1';
-            batchConfig.inspiration_image_id = config.selectedTemplate.id;
+            batchConfig.inspiration_image_id = driveIds[0];
+          } else {
+            batchConfig.generation_mode = uploadedIds.length > 0 && driveIds.length === 0 ? 'mode2' : 'mode1';
+            if (driveIds.length > 0) batchConfig.inspiration_image_ids = JSON.stringify(driveIds);
+            if (uploadedIds.length > 0) batchConfig.template_image_ids = JSON.stringify(uploadedIds);
           }
-        } else if (config.templateSource === TEMPLATE_UPLOAD && config.uploadedFile) {
-          // Upload template first
-          const uploaded = await api.uploadTemplate(projectId, config.uploadedFile, `Batch upload - ${config.uploadedFile.name}`);
+        } else if (config.templateSource === TEMPLATE_UPLOAD && config.uploadedFiles?.length > 0) {
+          const uploadedResults = [];
+          for (const file of config.uploadedFiles) {
+            uploadedResults.push(await api.uploadTemplate(projectId, file, `Batch upload - ${file.name}`));
+          }
+          const uploadedIds = uploadedResults.map(uploaded => uploaded.template?.id || uploaded.id).filter(Boolean);
           batchConfig.generation_mode = 'mode2';
-          batchConfig.template_image_id = uploaded.template?.id || uploaded.id;
+          if (uploadedIds.length === 1) batchConfig.template_image_id = uploadedIds[0];
+          else batchConfig.template_image_ids = JSON.stringify(uploadedIds);
         } else {
           batchConfig.generation_mode = 'mode1';
           if (config.templateSource === TEMPLATE_RANDOM && config.templateTag) {
             batchConfig.template_tag = config.templateTag;
           }
         }
+
+        if (config.batchProductFiles?.length > 0) {
+          batchConfig.product_images = await filesToProductImages(config.batchProductFiles);
+          if (batchConfig.product_images[0]) {
+            batchConfig.product_image = batchConfig.product_images[0].base64;
+            batchConfig.product_image_mime = batchConfig.product_images[0].mimeType;
+          }
+        }
+        if (config.skipProductImage) batchConfig.skip_product_image = true;
 
         const createdBatch = await api.createBatch(projectId, batchConfig);
         createdCount += 1;
@@ -859,24 +929,36 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
               {/* Manual Upload */}
               {templateSource === TEMPLATE_UPLOAD && (
                 <div>
-                  {uploadedFile && uploadedPreview ? (
-                    <div className="flex items-center gap-3 p-3 bg-ed-bg border border-black/5 rounded-xl">
-                      <img
-                        src={uploadedPreview}
-                        alt="Uploaded template"
-                        className="w-14 h-14 object-cover rounded-lg border border-black/5"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-ed-ink truncate">{uploadedFile.name}</p>
-                        <p className="text-[10px] text-ed-ink3">{(uploadedFile.size / 1024).toFixed(0)} KB — all ads in batch use this template</p>
+                  {uploadedFiles.length > 0 ? (
+                    <div className="p-3 bg-ed-bg border border-black/5 rounded-xl">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-medium text-ed-ink">
+                            {uploadedFiles.length} template image{uploadedFiles.length !== 1 ? 's' : ''} uploaded
+                          </p>
+                          <p className="text-[10px] text-ed-ink3">All uploaded templates are available to this batch.</p>
+                        </div>
+                        <button
+                          onClick={clearUploadedImage}
+                          disabled={creating}
+                          className="text-[11px] text-ed-rust hover:text-ed-rust transition-colors"
+                        >
+                          Remove all
+                        </button>
                       </div>
-                      <button
-                        onClick={clearUploadedImage}
-                        disabled={creating}
-                        className="text-[11px] text-ed-rust hover:text-ed-rust transition-colors"
-                      >
-                        Remove
-                      </button>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                        {uploadedPreviews.map(({ file, url }, index) => (
+                          <div key={`${file.name}-${index}`} className="relative rounded-lg overflow-hidden border border-black/5 aspect-square bg-white">
+                            <img src={url} alt={file.name} className="w-full h-full object-cover" />
+                            <div className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[9px] px-1 py-0.5 truncate">
+                              {file.name}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-ed-ink3 mt-2">
+                        Tip: 1-4 reference images works best. With more, your prompt guidelines should tell the model how to use them.
+                      </p>
                     </div>
                   ) : (
                     <div
@@ -891,16 +973,20 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                       }`}
                     >
                       <p className={`text-[12px] font-medium ${dragOver ? 'text-ed-accent' : 'text-ed-ink2'}`}>
-                        {dragOver ? 'Drop image here' : 'Drop a template image, or click to browse'}
+                        {dragOver ? 'Drop images here' : 'Drop template images, or click to browse'}
                       </p>
-                      <p className="text-[10px] text-ed-ink3 mt-0.5">JPG, PNG, WebP, or GIF — all ads in batch use this template</p>
+                      <p className="text-[10px] text-ed-ink3 mt-0.5">JPG, PNG, WebP, or GIF — up to 10 images</p>
+                      <p className="text-[10px] text-ed-ink3 mt-1">
+                        Tip: 1-4 reference images works best. With more, your prompt guidelines should tell the model how to use them.
+                      </p>
                     </div>
                   )}
                   <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     accept=".jpg,.jpeg,.png,.webp,.gif"
-                    onChange={e => { if (e.target.files?.[0]) handleFileSelected(e.target.files[0]); }}
+                    onChange={e => { if (e.target.files?.length) handleFileSelected(e.target.files); }}
                     className="hidden"
                   />
                 </div>
@@ -1040,7 +1126,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
               </label>
 
               {/* Show project-level product image indicator */}
-              {project?.productImageUrl && !batchProductFile && (
+              {project?.productImageUrl && batchProductFiles.length === 0 && (
                 <div className="flex items-center gap-3 p-2.5 bg-ed-green/5 border border-ed-green/15 rounded-xl mb-2">
                   <img
                     src={project.productImageUrl}
@@ -1049,40 +1135,49 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-medium text-ed-green">Using project product image</p>
-                    <p className="text-[10px] text-ed-green/70">Used for all ads in this batch unless you choose a different image.</p>
+                    <p className="text-[10px] text-ed-green/70">Used for all ads in this batch unless you choose different reference images.</p>
                   </div>
                   <button
                     onClick={() => !creating && batchProductInputRef.current?.click()}
                     className="text-[10px] text-ed-ink3 hover:text-ed-ink2 transition-colors text-right leading-tight max-w-[92px] sm:max-w-none"
                   >
-                    Use different image for this batch
+                    Use different references
                   </button>
                 </div>
               )}
 
-              {batchProductFile && batchProductPreview ? (
-                <div className="flex items-center gap-3 p-3 bg-ed-bg border border-black/5 rounded-xl">
-                  <img
-                    src={batchProductPreview}
-                    alt="Product image"
-                    className="w-12 h-12 object-cover rounded-lg border border-black/5"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-ed-ink truncate">
-                      {project?.productImageUrl ? 'Batch-only product image override' : batchProductFile.name}
-                    </p>
-                    <p className="text-[10px] text-ed-ink3">
-                      {project?.productImageUrl ? `${batchProductFile.name} · ` : ''}{(batchProductFile.size / 1024).toFixed(0)} KB
-                      {project?.productImageUrl ? ' — overrides the project image for this batch only' : ' — used for all ads in batch'}
-                    </p>
+              {batchProductFiles.length > 0 ? (
+                <div className="p-3 bg-ed-bg border border-black/5 rounded-xl">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-ed-ink">
+                        {batchProductFiles.length} reference image{batchProductFiles.length !== 1 ? 's' : ''} selected
+                      </p>
+                      <p className="text-[10px] text-ed-ink3">
+                        {project?.productImageUrl ? 'Overrides the project image for this batch only.' : 'Attached to every ad in this batch.'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={clearBatchProductImage}
+                      disabled={creating}
+                      className="text-[11px] text-ed-rust hover:text-ed-rust transition-colors"
+                    >
+                      Remove all
+                    </button>
                   </div>
-                  <button
-                    onClick={clearBatchProductImage}
-                    disabled={creating}
-                    className="text-[11px] text-ed-rust hover:text-ed-rust transition-colors"
-                  >
-                    Remove
-                  </button>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                    {batchProductPreviews.map(({ file, url }, index) => (
+                      <div key={`${file.name}-${index}`} className="relative rounded-lg overflow-hidden border border-black/5 aspect-square bg-white">
+                        <img src={url} alt={file.name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[9px] px-1 py-0.5 truncate">
+                          {file.name}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-ed-ink3 mt-2">
+                    Tip: 1-4 reference images works best. With more, your prompt guidelines should tell the model how to use them.
+                  </p>
                 </div>
               ) : !project?.productImageUrl ? (
                 <div
@@ -1100,21 +1195,25 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v12a2.25 2.25 0 002.25 2.25z" />
                   </svg>
                   <p className={`text-[11px] font-medium ${batchProductDragOver ? 'text-ed-accent' : 'text-ed-ink2'}`}>
-                    {batchProductDragOver ? 'Drop product image here' : 'Drop a product image, or click to browse'}
+                    {batchProductDragOver ? 'Drop reference images here' : 'Drop reference images, or click to browse'}
                   </p>
-                  <p className="text-[10px] text-ed-ink3 mt-0.5">Or set one in Project Settings for all ads</p>
+                  <p className="text-[10px] text-ed-ink3 mt-0.5">Up to 10 images, or set one default in Project Settings</p>
+                  <p className="text-[10px] text-ed-ink3 mt-1">
+                    Tip: 1-4 reference images works best. With more, your prompt guidelines should tell the model how to use them.
+                  </p>
                 </div>
               ) : null}
               <input
                 ref={batchProductInputRef}
                 type="file"
+                multiple
                 accept=".jpg,.jpeg,.png,.webp,.gif"
-                onChange={e => { if (e.target.files?.[0]) handleBatchProductSelected(e.target.files[0]); }}
+                onChange={e => { if (e.target.files?.length) handleBatchProductSelected(e.target.files); }}
                 className="hidden"
               />
 
               {/* Skip product image toggle (only when project has one) */}
-              {(project?.productImageUrl || batchProductFile) && (
+              {(project?.productImageUrl || batchProductFiles.length > 0) && (
                 <button
                   onClick={() => setSkipProductImage(!skipProductImage)}
                   className={`mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-lg transition-all ${

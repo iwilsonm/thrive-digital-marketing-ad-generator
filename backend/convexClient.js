@@ -790,7 +790,7 @@ export async function getProjectStats(projectId) {
 // Batch job helpers
 // =============================================
 
-export async function createBatchJob({ id, project_id, generation_mode, batch_size, angle, angles, aspect_ratio, template_image_id, template_image_ids, template_tag, inspiration_image_id, inspiration_image_ids, product_image_storageId, scheduled, schedule_cron, filter_assigned, status, queued_at, last_heartbeat_at, posting_day, conductor_run_id, angle_name, angle_prompt, angle_brief, image_model, image_provider, openai_batch_job }) {
+export async function createBatchJob({ id, project_id, generation_mode, batch_size, angle, angles, aspect_ratio, template_image_id, template_image_ids, template_tag, inspiration_image_id, inspiration_image_ids, product_image_storageId, product_image_storageIds, scheduled, schedule_cron, filter_assigned, status, queued_at, last_heartbeat_at, posting_day, conductor_run_id, angle_name, angle_prompt, angle_brief, image_model, image_provider, openai_batch_job }) {
   await mutationWithRetry(api.batchJobs.create, {
     externalId: id,
     project_id,
@@ -805,6 +805,7 @@ export async function createBatchJob({ id, project_id, generation_mode, batch_si
     inspiration_image_id: inspiration_image_id || undefined,
     inspiration_image_ids: inspiration_image_ids || undefined,
     product_image_storageId: product_image_storageId || undefined,
+    product_image_storageIds: product_image_storageIds || undefined,
     scheduled: !!scheduled,
     schedule_cron: schedule_cron || undefined,
     filter_assigned: filter_assigned ? true : undefined,
@@ -858,7 +859,7 @@ export async function getCompletedDirectorBatchStats(sinceDate) {
 }
 
 export async function updateBatchJob(id, fields) {
-  const allowed = ['status', 'gemini_batch_job', 'openai_batch_job', 'image_model', 'image_provider', 'gpt_prompts', 'error_message', 'started_at', 'completed_at', 'completed_count', 'failed_count', 'run_count', 'scheduled', 'schedule_cron', 'retry_count', 'queued_at', 'last_heartbeat_at', 'stale_detected_at', 'worker_lease_owner', 'worker_lease_expires_at', 'last_scheduled_run_key', 'batch_stats', 'pipeline_state', 'angle', 'angles', 'batch_size', 'aspect_ratio', 'used_template_ids', 'filter_assigned', 'filter_processed', 'filter_processed_at', 'posting_day', 'conductor_run_id', 'angle_name', 'angle_prompt', 'angle_brief', 'flex_ad_id', 'lp_primary_id', 'lp_primary_url', 'lp_primary_status', 'lp_primary_error', 'lp_primary_retry_count', 'lp_secondary_id', 'lp_secondary_url', 'lp_secondary_status', 'lp_secondary_error', 'lp_secondary_retry_count', 'lp_narrative_frames', 'gauntlet_lp_urls'];
+  const allowed = ['status', 'gemini_batch_job', 'openai_batch_job', 'image_model', 'image_provider', 'product_image_storageIds', 'gpt_prompts', 'error_message', 'started_at', 'completed_at', 'completed_count', 'failed_count', 'run_count', 'scheduled', 'schedule_cron', 'retry_count', 'queued_at', 'last_heartbeat_at', 'stale_detected_at', 'worker_lease_owner', 'worker_lease_expires_at', 'last_scheduled_run_key', 'batch_stats', 'pipeline_state', 'angle', 'angles', 'batch_size', 'aspect_ratio', 'used_template_ids', 'filter_assigned', 'filter_processed', 'filter_processed_at', 'posting_day', 'conductor_run_id', 'angle_name', 'angle_prompt', 'angle_brief', 'flex_ad_id', 'lp_primary_id', 'lp_primary_url', 'lp_primary_status', 'lp_primary_error', 'lp_primary_retry_count', 'lp_secondary_id', 'lp_secondary_url', 'lp_secondary_status', 'lp_secondary_error', 'lp_secondary_retry_count', 'lp_narrative_frames', 'gauntlet_lp_urls'];
   const updates = { externalId: id };
   for (const key of allowed) {
     if (fields[key] !== undefined) {
@@ -933,6 +934,7 @@ function convexBatchToRow(b) {
     template_image_id: b.template_image_id || null,
     inspiration_image_id: b.inspiration_image_id || null,
     product_image_storageId: b.product_image_storageId || null,
+    product_image_storageIds: b.product_image_storageIds || null,
     product_image_path: null, // no longer used
     gemini_batch_job: b.gemini_batch_job || null,
     openai_batch_job: b.openai_batch_job || null,

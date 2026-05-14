@@ -299,8 +299,9 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
 
   // Product image
-  const [productFile, setProductFile] = useState(null);
-  const [productPreview, setProductPreview] = useState(null);
+  const [productFiles, setProductFiles] = useState([]);
+  const [productPreviews, setProductPreviews] = useState([]);
+  const productFile = productFiles[0] || null;
   // When the user uploads a per-ad product image AND the project has none yet,
   // they can opt to also persist this upload as the project's default product
   // image. Toggle is OFF by default; reset on project change.
@@ -907,16 +908,25 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   };
 
   // --- Product image handling ---
-  const handleProductFileSelected = useCallback((file) => {
-    if (!file) return;
+  const handleProductFileSelected = useCallback((files) => {
+    const selected = Array.from(files || []).filter(Boolean);
+    if (selected.length === 0) return;
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) {
+    const invalid = selected.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
+    if (invalid) {
+      const ext = '.' + invalid.name.split('.').pop().toLowerCase();
       setGenError(`File type ${ext} not supported. Use JPG, PNG, WebP, or GIF.`);
       return;
     }
-    setProductFile(file);
-    setProductPreview(URL.createObjectURL(file));
+    if (selected.length > 10) {
+      setGenError('Use up to 10 reference images per generation.');
+      return;
+    }
+    setProductPreviews(prev => {
+      prev.forEach(item => URL.revokeObjectURL(item.url));
+      return selected.map(file => ({ file, url: URL.createObjectURL(file) }));
+    });
+    setProductFiles(selected);
     setGenError('');
   }, []);
 
@@ -924,8 +934,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     e.preventDefault();
     e.stopPropagation();
     setProductDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) handleProductFileSelected(file);
+    if (e.dataTransfer?.files?.length) handleProductFileSelected(e.dataTransfer.files);
   }, [handleProductFileSelected]);
 
   const handleProductDragOver = useCallback((e) => {
@@ -941,9 +950,9 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   }, []);
 
   const clearProductImage = () => {
-    setProductFile(null);
-    if (productPreview) URL.revokeObjectURL(productPreview);
-    setProductPreview(null);
+    setProductFiles([]);
+    productPreviews.forEach(item => URL.revokeObjectURL(item.url));
+    setProductPreviews([]);
     if (productFileInputRef.current) productFileInputRef.current.value = '';
   };
 
@@ -1192,16 +1201,23 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
 
     // Helper: attach product image if present (with auto-resize for Vercel body limits)
     const attachProductImage = async (opts) => {
-      if (productFile) {
-        const sourceFile = productFile;
+      if (productFiles.length > 0) {
+        const sourceFiles = [...productFiles];
+        const productImages = [];
         try {
-          const { base64, mime, file: resized } = await resizeAndBase64(sourceFile);
-          if (sourceFile !== productFile) return false; // user replaced mid-resize; abandon this generation
-          opts.product_image = base64;
-          opts.product_image_mime = mime;
-          resizedFiles.push(resized);
+          for (const sourceFile of sourceFiles) {
+            const { base64, mime, file: resized } = await resizeAndBase64(sourceFile);
+            productImages.push({ base64, mimeType: mime });
+            resizedFiles.push(resized);
+          }
+          if (sourceFiles.length !== productFiles.length || sourceFiles.some((file, index) => file !== productFiles[index])) return false;
+          opts.product_images = productImages;
+          if (productImages[0]) {
+            opts.product_image = productImages[0].base64;
+            opts.product_image_mime = productImages[0].mimeType;
+          }
         } catch (err) {
-          updateGen(genId, { error: err.message || 'Failed to read the product image.', status: null });
+          updateGen(genId, { error: err.message || 'Failed to read the reference images.', status: null });
           return false;
         }
       }
@@ -1234,7 +1250,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
       }
     };
 
-    const oneTimeProductFile = productFile;
+    const hadOneTimeProductFiles = productFiles.length > 0;
     let stream;
 
     if (isCustomPromptMode) {
@@ -1338,7 +1354,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
       updateGen(genId, { stream });
     }
 
-    if (oneTimeProductFile && !saveProductAsDefault) {
+    if (hadOneTimeProductFiles && !saveProductAsDefault) {
       clearProductImage();
     }
 
@@ -2678,23 +2694,29 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
             </div>
           )}
 
-          {/* Per-ad override: show when user has uploaded one OR when no project image */}
-          {productFile && productPreview ? (
+          {/* Per-ad override: show when user has uploaded one or more references OR when no project image */}
+          {productFiles.length > 0 ? (
             <div className="space-y-2">
               <div className="flex items-center gap-3 p-3 bg-ed-bg border border-ed-line rounded-xl">
-                <img
-                  src={productPreview}
-                  alt="Product image"
-                  className="w-12 h-12 object-cover rounded-lg border border-ed-line"
-                />
+                <div className="grid grid-cols-5 gap-1.5 flex-shrink-0">
+                  {productPreviews.slice(0, 10).map((item, index) => (
+                    <img
+                      key={`${item.file.name}-${index}`}
+                      src={item.url}
+                      alt={`Reference ${index + 1}`}
+                      className="w-10 h-10 object-cover rounded-lg border border-ed-line"
+                    />
+                  ))}
+                </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium text-ed-ink truncate">One-time product image override</p>
+                  <p className="text-[12px] font-medium text-ed-ink truncate">One-time reference image override</p>
                   <p className="text-[10px] text-ed-ink3">
-                    {productFile.name} · {(productFile.size / 1024).toFixed(0)} KB
+                    {productFiles.length} image{productFiles.length === 1 ? '' : 's'} · {(productFiles.reduce((sum, file) => sum + file.size, 0) / 1024).toFixed(0)} KB total
                   </p>
                   {project?.productImageUrl && (
                     <p className="text-[10px] text-ed-ink3 mt-0.5">This only affects the next ad you generate. Your project default stays unchanged.</p>
                   )}
+                  <p className="text-[10px] text-ed-ink3 mt-1">Tip: 1-4 reference images works best. With more, your prompt guidelines should tell the model how to use them.</p>
                 </div>
                 <button
                   onClick={clearProductImage}
@@ -2728,7 +2750,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
                       Save as project default
                     </p>
                     <p className={`text-[10px] mt-0.5 leading-snug ${saveProductAsDefault ? 'text-ed-green/80' : 'text-ed-accent/60'}`}>
-                      Future ads in this project will automatically use this image.
+                      Future ads in this project will automatically use the first image.
                     </p>
                   </div>
                 </div>
@@ -2749,19 +2771,21 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
               <svg className="w-5 h-5 mx-auto mb-1 text-ed-ink3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v12a2.25 2.25 0 002.25 2.25z" />
               </svg>
-              <p className={`text-[11px] font-medium ${productDragOver ? 'text-ed-accent' : 'text-ed-ink2'}`}>
-                {productDragOver ? 'Drop product image here' : 'Drop a product image, or click to browse'}
-              </p>
-              <p className="text-[10px] text-ed-ink3 mt-0.5">Or set one in Project Settings for all ads</p>
-            </div>
-          ) : null}
-          <input
-            ref={productFileInputRef}
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp,.gif"
-            onChange={e => { if (e.target.files?.[0]) handleProductFileSelected(e.target.files[0]); }}
-            className="hidden"
-          />
+                  <p className={`text-[11px] font-medium ${productDragOver ? 'text-ed-accent' : 'text-ed-ink2'}`}>
+                    {productDragOver ? 'Drop reference images here' : 'Drop reference images, or click to browse'}
+                  </p>
+                  <p className="text-[10px] text-ed-ink3 mt-0.5">Up to 10 images. Or set one in Project Settings for all ads.</p>
+                  <p className="text-[10px] text-ed-ink3 mt-0.5">Tip: 1-4 reference images works best. With more, your prompt guidelines should tell the model how to use them.</p>
+                </div>
+              ) : null}
+              <input
+                ref={productFileInputRef}
+                type="file"
+                multiple
+                accept=".jpg,.jpeg,.png,.webp,.gif"
+                onChange={e => { if (e.target.files?.length) handleProductFileSelected(e.target.files); }}
+                className="hidden"
+              />
         </div>
 
         {/* ── OPTIONAL FIELDS (collapsible) ── */}

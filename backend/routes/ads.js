@@ -21,6 +21,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const THUMB_CACHE_DIR = path.join(__dirname, '..', '.thumb-cache');
+const MAX_REFERENCE_IMAGES = 10;
 
 // Ensure thumbnail cache directory exists
 if (!fs.existsSync(THUMB_CACHE_DIR)) {
@@ -29,6 +30,28 @@ if (!fs.existsSync(THUMB_CACHE_DIR)) {
 
 const router = Router();
 router.use(requireAuth);
+
+function normalizeProductImages(body) {
+  const incoming = Array.isArray(body.product_images)
+    ? body.product_images
+    : (body.product_images ? [body.product_images] : []);
+  const normalized = incoming
+    .map(img => ({
+      base64: img?.base64 || img?.image || null,
+      mimeType: img?.mimeType || img?.mime_type || img?.mime || 'image/png',
+    }))
+    .filter(img => img.base64);
+  if (normalized.length > MAX_REFERENCE_IMAGES) {
+    const err = new Error(`Use up to ${MAX_REFERENCE_IMAGES} reference images per generation.`);
+    err.status = 400;
+    throw err;
+  }
+  if (normalized.length > 0) return normalized;
+  if (body.product_image && body.product_image_mime) {
+    return [{ base64: body.product_image, mimeType: body.product_image_mime }];
+  }
+  return [];
+}
 
 const TERMINAL_AD_STATUSES = new Set(['completed', 'failed', 'cancelled', 'canceled', 'quality_rejected']);
 const CANCELLABLE_AD_STATUSES = new Set(['pending', 'queued', 'generating_copy', 'generating_image']);
@@ -100,14 +123,21 @@ router.post('/:projectId/generate-ad', async (req, res) => {
 
   let { mode = 'mode1', aspect_ratio, angle, inspiration_image_id, uploaded_image, uploaded_image_mime, product_image, product_image_mime, headline, body_copy, template_image_id, template_tag, skip_product_image, image_model, save_as_project_default } = req.body;
   template_tag = normalizeTemplateTag(template_tag);
+  let productImages;
+  try {
+    productImages = normalizeProductImages(req.body || {});
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
 
   // If user opted to save the per-ad product image as the project default,
   // persist it BEFORE generation so the image is saved even if generation fails.
   // Only fires when there's a per-ad upload AND the project has no image yet.
-  if (save_as_project_default && product_image && product_image_mime && !project.product_image_storageId) {
+  const firstProductImage = productImages[0] || null;
+  if (save_as_project_default && firstProductImage && !project.product_image_storageId) {
     try {
-      const buffer = Buffer.from(product_image, 'base64');
-      const storageId = await uploadBuffer(buffer, product_image_mime);
+      const buffer = Buffer.from(firstProductImage.base64, 'base64');
+      const storageId = await uploadBuffer(buffer, firstProductImage.mimeType);
       await setProjectProductImage(req.params.projectId, storageId);
       project.product_image_storageId = storageId;  // keep local var in sync for downstream code
     } catch (err) {
@@ -120,12 +150,13 @@ router.post('/:projectId/generate-ad', async (req, res) => {
   // If the fetch fails (dead storageId, transient Convex error, etc.), capture a warning
   // to surface via SSE so the user knows their toggle was ON but the image was dropped.
   let productImageWarning = null;
-  if (!product_image && !skip_product_image && project.product_image_storageId) {
+  if (productImages.length === 0 && !product_image && !skip_product_image && project.product_image_storageId) {
     try {
       const projImg = await getProjectProductImage(project);
       if (projImg) {
         product_image = projImg.base64;
         product_image_mime = projImg.mimeType;
+        productImages = [{ base64: projImg.base64, mimeType: projImg.mimeType }];
       }
     } catch (err) {
       if (err.code === 'product_image_fetch_failed') {
@@ -164,6 +195,7 @@ router.post('/:projectId/generate-ad', async (req, res) => {
           angle,
           aspectRatio: aspect_ratio || '1:1',
           imageModel: image_model || undefined,
+          productImages,
           productImageBase64: product_image || undefined,
           productImageMimeType: product_image_mime || undefined,
           headline: headline || undefined,
@@ -180,6 +212,7 @@ router.post('/:projectId/generate-ad', async (req, res) => {
           templateTag: template_tag || undefined,
           uploadedImageBase64: uploaded_image || undefined,
           uploadedImageMimeType: uploaded_image_mime || undefined,
+          productImages,
           productImageBase64: product_image || undefined,
           productImageMimeType: product_image_mime || undefined,
           headline: headline || undefined,
@@ -200,12 +233,19 @@ router.post('/:projectId/regenerate-image', async (req, res) => {
   if (!project) return res.status(404).json({ error: 'Project not found' });
 
   let { image_prompt, aspect_ratio, parent_ad_id, product_image, product_image_mime, reference_image, reference_image_mime, angle, headline, body_copy, skip_product_image, image_model, save_as_project_default } = req.body;
+  let productImages;
+  try {
+    productImages = normalizeProductImages(req.body || {});
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
 
   // Same save-as-project-default flow as in the generate-ad route.
-  if (save_as_project_default && product_image && product_image_mime && !project.product_image_storageId) {
+  const firstProductImage = productImages[0] || null;
+  if (save_as_project_default && firstProductImage && !project.product_image_storageId) {
     try {
-      const buffer = Buffer.from(product_image, 'base64');
-      const storageId = await uploadBuffer(buffer, product_image_mime);
+      const buffer = Buffer.from(firstProductImage.base64, 'base64');
+      const storageId = await uploadBuffer(buffer, firstProductImage.mimeType);
       await setProjectProductImage(req.params.projectId, storageId);
       project.product_image_storageId = storageId;
     } catch (err) {
@@ -216,12 +256,13 @@ router.post('/:projectId/regenerate-image', async (req, res) => {
   // Auto-inject project-level product image if none provided (and not explicitly skipped).
   // Surface fetch failures as an SSE warning instead of silently dropping the image.
   let productImageWarning = null;
-  if (!product_image && !skip_product_image && project.product_image_storageId) {
+  if (productImages.length === 0 && !product_image && !skip_product_image && project.product_image_storageId) {
     try {
       const projImg = await getProjectProductImage(project);
       if (projImg) {
         product_image = projImg.base64;
         product_image_mime = projImg.mimeType;
+        productImages = [{ base64: projImg.base64, mimeType: projImg.mimeType }];
       }
     } catch (err) {
       if (err.code === 'product_image_fetch_failed') {
@@ -247,6 +288,7 @@ router.post('/:projectId/regenerate-image', async (req, res) => {
         aspectRatio: aspect_ratio || '1:1',
         imageModel: image_model || undefined,
         parentAdId: parent_ad_id || undefined,
+        productImages,
         productImageBase64: product_image || undefined,
         productImageMimeType: product_image_mime || undefined,
         referenceImageBase64: reference_image || undefined,

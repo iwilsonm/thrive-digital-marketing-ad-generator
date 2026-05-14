@@ -9,6 +9,7 @@ const OPENAI_IMAGE_MAX_ATTEMPTS = 2;
 const DEFAULT_MODEL = 'gpt-image-2';
 const DEFAULT_QUALITY = 'medium';
 const DEFAULT_FORMAT = 'jpeg';
+const MAX_REFERENCE_IMAGES = 10;
 
 let client = null;
 let lastApiKey = null;
@@ -133,11 +134,21 @@ function attachImageAttempts(err, imageAttempts) {
   return err;
 }
 
-async function buildImageFile(productImage) {
+function normalizeProductImages(productImage) {
+  if (!productImage) return [];
+  const images = Array.isArray(productImage) ? productImage : [productImage];
+  const filtered = images.filter(img => img?.base64);
+  if (filtered.length > MAX_REFERENCE_IMAGES) {
+    throw new Error(`Image generation supports up to ${MAX_REFERENCE_IMAGES} reference images. Remove ${filtered.length - MAX_REFERENCE_IMAGES} image${filtered.length - MAX_REFERENCE_IMAGES === 1 ? '' : 's'} and try again.`);
+  }
+  return filtered;
+}
+
+async function buildImageFile(productImage, index = 0) {
   if (!productImage?.base64) return null;
   const mimeType = productImage.mimeType || 'image/png';
   const extension = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png';
-  return toFile(Buffer.from(productImage.base64, 'base64'), `reference.${extension}`, { type: mimeType });
+  return toFile(Buffer.from(productImage.base64, 'base64'), `reference-${index + 1}.${extension}`, { type: mimeType });
 }
 
 export function getOpenAIImageSize(aspectRatio = '1:1') {
@@ -156,6 +167,7 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
   const imageAttempts = [];
   const size = mapAspectRatioToSize(aspectRatio || '1:1');
   const resolvedQuality = quality === 'low' ? 'low' : DEFAULT_QUALITY;
+  const productImages = normalizeProductImages(productImage);
 
   try {
     const response = await withRetry(
@@ -167,8 +179,8 @@ export async function generateImage(prompt, aspectRatio = '1:1', productImage = 
         try {
           const result = await withAttemptTimeout(async (signal) => {
             const requestOptions = signal ? { signal } : undefined;
-            if (productImage) {
-              const image = await buildImageFile(productImage);
+            if (productImages.length > 0) {
+              const image = await Promise.all(productImages.map((img, index) => buildImageFile(img, index)));
               return openai.images.edit({
                 model,
                 image,
