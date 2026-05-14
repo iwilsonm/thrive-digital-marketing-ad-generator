@@ -206,19 +206,22 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
   };
 
   // File upload handlers for Manual Upload
-  const handleFileSelected = useCallback((files) => {
-    const selected = Array.from(files || []).filter(Boolean);
-    if (selected.length === 0) return;
+  const handleFileSelected = useCallback((files, { append = false } = {}) => {
+    const incoming = Array.from(files || []).filter(Boolean);
+    if (incoming.length === 0) return;
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const invalid = selected.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
+    const invalid = incoming.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
     if (invalid) {
       const ext = '.' + invalid.name.split('.').pop().toLowerCase();
       setCreateError(`File type ${ext} not supported. Use JPG, PNG, WebP, or GIF.`);
       return;
     }
-    if (selected.length > 10) {
+    const combined = append ? [...uploadedFiles, ...incoming] : incoming;
+    const selected = combined.slice(0, 10);
+    if (combined.length > 10) {
       setCreateError('Use up to 10 images per upload.');
-      return;
+    } else {
+      setCreateError('');
     }
     setUploadedPreviews(prev => {
       prev.forEach(item => URL.revokeObjectURL(item.url));
@@ -226,14 +229,13 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     });
     setUploadedFiles(selected);
     setTemplateSource(TEMPLATE_UPLOAD);
-    setCreateError('');
-  }, []);
+  }, [uploadedFiles]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
-    if (e.dataTransfer?.files?.length) handleFileSelected(e.dataTransfer.files);
+    if (e.dataTransfer?.files?.length) handleFileSelected(e.dataTransfer.files, { append: true });
   }, [handleFileSelected]);
 
   const handleDragOver = useCallback((e) => {
@@ -269,32 +271,35 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
   };
 
   // Product image handlers
-  const handleBatchProductSelected = useCallback((files) => {
-    const selected = Array.from(files || []).filter(Boolean);
-    if (selected.length === 0) return;
+  const handleBatchProductSelected = useCallback((files, { append = false } = {}) => {
+    const incoming = Array.from(files || []).filter(Boolean);
+    if (incoming.length === 0) return;
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const invalid = selected.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
+    const invalid = incoming.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
     if (invalid) {
       const ext = '.' + invalid.name.split('.').pop().toLowerCase();
       setCreateError(`File type ${ext} not supported. Use JPG, PNG, WebP, or GIF.`);
       return;
     }
-    if (selected.length > 10) {
+    const combined = append ? [...batchProductFiles, ...incoming] : incoming;
+    const selected = combined.slice(0, 10);
+    if (combined.length > 10) {
       setCreateError('Use up to 10 reference images per batch.');
-      return;
+    } else {
+      setCreateError('');
     }
     setBatchProductPreviews(prev => {
       prev.forEach(item => URL.revokeObjectURL(item.url));
       return selected.map(file => ({ file, url: URL.createObjectURL(file) }));
     });
     setBatchProductFiles(selected);
-  }, []);
+  }, [batchProductFiles]);
 
   const handleBatchProductDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setBatchProductDragOver(false);
-    if (e.dataTransfer?.files?.length) handleBatchProductSelected(e.dataTransfer.files);
+    if (e.dataTransfer?.files?.length) handleBatchProductSelected(e.dataTransfer.files, { append: true });
   }, [handleBatchProductSelected]);
 
   const clearBatchProductImage = () => {
@@ -1002,6 +1007,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                     </div>
                   ) : (
                     <div
+                      data-testid="batch-template-dropzone"
                       onClick={() => !creating && fileInputRef.current?.click()}
                       onDragOver={handleDragOver}
                       onDragEnter={handleDragOver}
@@ -1236,6 +1242,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                 </div>
               ) : !project?.productImageUrl ? (
                 <div
+                  data-testid="batch-reference-dropzone"
                   onClick={() => !creating && batchProductInputRef.current?.click()}
                   onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setBatchProductDragOver(true); }}
                   onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setBatchProductDragOver(true); }}

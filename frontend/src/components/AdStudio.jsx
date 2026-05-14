@@ -909,33 +909,35 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   };
 
   // --- Product image handling ---
-  const handleProductFileSelected = useCallback((files) => {
-    const selected = Array.from(files || []).filter(Boolean);
-    if (selected.length === 0) return;
+  const handleProductFileSelected = useCallback((files, { append = false } = {}) => {
+    const incoming = Array.from(files || []).filter(Boolean);
+    if (incoming.length === 0) return;
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const invalid = selected.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
+    const invalid = incoming.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
     if (invalid) {
       const ext = '.' + invalid.name.split('.').pop().toLowerCase();
       setGenError(`File type ${ext} not supported. Use JPG, PNG, WebP, or GIF.`);
       return;
     }
-    if (selected.length > 10) {
+    const combined = append ? [...productFiles, ...incoming] : incoming;
+    const selected = combined.slice(0, 10);
+    if (combined.length > 10) {
       setGenError('Use up to 10 reference images per generation.');
-      return;
+    } else {
+      setGenError('');
     }
     setProductPreviews(prev => {
       prev.forEach(item => URL.revokeObjectURL(item.url));
       return selected.map(file => ({ file, url: URL.createObjectURL(file) }));
     });
     setProductFiles(selected);
-    setGenError('');
-  }, []);
+  }, [productFiles]);
 
   const handleProductDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setProductDragOver(false);
-    if (e.dataTransfer?.files?.length) handleProductFileSelected(e.dataTransfer.files);
+    if (e.dataTransfer?.files?.length) handleProductFileSelected(e.dataTransfer.files, { append: true });
   }, [handleProductFileSelected]);
 
   const handleProductDragOver = useCallback((e) => {
@@ -2786,6 +2788,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
             </div>
           ) : !project?.productImageUrl ? (
             <div
+              data-testid="adstudio-reference-dropzone"
               onClick={() => productFileInputRef.current?.click()}
               onDragOver={handleProductDragOver}
               onDragEnter={handleProductDragOver}
