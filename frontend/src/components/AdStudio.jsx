@@ -272,8 +272,10 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   const [templateTag, setTemplateTag] = useState('');
 
   // Upload one-off image
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [uploadedPreview, setUploadedPreview] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedPreviews, setUploadedPreviews] = useState([]);
+  const uploadedFile = uploadedFiles[0] || null;
+  const uploadedPreview = uploadedPreviews[0]?.url || null;
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -867,26 +869,36 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   };
 
   // --- Upload handling ---
-  const handleFileSelected = useCallback((file) => {
-    if (!file) return;
+  const handleFileSelected = useCallback((files, { append = false } = {}) => {
+    const incoming = Array.from(files || []).filter(Boolean);
+    if (incoming.length === 0) return;
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-    const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) {
+    const invalid = incoming.find(file => !allowed.includes('.' + file.name.split('.').pop().toLowerCase()));
+    if (invalid) {
+      const ext = '.' + invalid.name.split('.').pop().toLowerCase();
       setGenError(`File type ${ext} not supported. Use JPG, PNG, WebP, or GIF.`);
       return;
     }
-    setUploadedFile(file);
-    setUploadedPreview(URL.createObjectURL(file));
+    const combined = append ? [...uploadedFiles, ...incoming] : incoming;
+    const selected = combined.slice(0, 10);
+    if (combined.length > 10) {
+      setGenError('Use up to 10 template images per generation.');
+    } else {
+      setGenError('');
+    }
+    setUploadedPreviews(prev => {
+      prev.forEach(item => URL.revokeObjectURL(item.url));
+      return selected.map(file => ({ file, url: URL.createObjectURL(file) }));
+    });
+    setUploadedFiles(selected);
     setTemplateSource(TEMPLATE_UPLOAD);
-    setGenError('');
-  }, []);
+  }, [uploadedFiles]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOver(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) handleFileSelected(file);
+    if (e.dataTransfer?.files?.length) handleFileSelected(e.dataTransfer.files, { append: true });
   }, [handleFileSelected]);
 
   const handleDragOver = useCallback((e) => {
@@ -902,10 +914,23 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
   }, []);
 
   const clearUploadedImage = () => {
-    setUploadedFile(null);
-    if (uploadedPreview) URL.revokeObjectURL(uploadedPreview);
-    setUploadedPreview(null);
+    setUploadedFiles([]);
+    uploadedPreviews.forEach(item => URL.revokeObjectURL(item.url));
+    setUploadedPreviews([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeUploadedImageAt = (indexToRemove) => {
+    setUploadedPreviews(prev => {
+      const removed = prev[indexToRemove];
+      if (removed?.url) URL.revokeObjectURL(removed.url);
+      return prev.filter((_, index) => index !== indexToRemove);
+    });
+    setUploadedFiles(prev => {
+      const next = prev.filter((_, index) => index !== indexToRemove);
+      if (next.length === 0 && fileInputRef.current) fileInputRef.current.value = '';
+      return next;
+    });
   };
 
   // --- Product image handling ---
@@ -1267,6 +1292,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     };
 
     const hadOneTimeProductFiles = productFiles.length > 0;
+    let uploadedExtraReferenceImages = [];
     let stream;
 
     if (isCustomPromptMode) {
@@ -1349,21 +1375,42 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
         options.template_tag = templateTag;
       }
 
-      if (templateSource === TEMPLATE_UPLOAD && uploadedFile) {
-        const sourceUploaded = uploadedFile;
+      if (templateSource === TEMPLATE_UPLOAD && uploadedFiles.length > 0) {
+        const sourceUploaded = [...uploadedFiles];
+        const uploadedImages = [];
         try {
-          const { base64, mime, file: resized } = await resizeAndBase64(sourceUploaded);
-          if (sourceUploaded !== uploadedFile) return; // user replaced mid-resize; abandon
-          options.uploaded_image = base64;
-          options.uploaded_image_mime = mime;
-          resizedFiles.push(resized);
+          for (const sourceFile of sourceUploaded) {
+            const { base64, mime, file: resized } = await resizeAndBase64(sourceFile);
+            uploadedImages.push({ base64, mimeType: mime });
+            resizedFiles.push(resized);
+          }
+          if (sourceUploaded.length !== uploadedFiles.length || sourceUploaded.some((file, index) => file !== uploadedFiles[index])) return; // user replaced mid-resize; abandon
+          options.uploaded_images = uploadedImages;
+          if (uploadedImages[0]) {
+            options.uploaded_image = uploadedImages[0].base64;
+            options.uploaded_image_mime = uploadedImages[0].mimeType;
+          }
+          uploadedExtraReferenceImages = uploadedImages.slice(1);
         } catch (err) {
-          updateGen(genId, { error: err.message || 'Failed to read the uploaded image.', status: null });
+          updateGen(genId, { error: err.message || 'Failed to read the uploaded images.', status: null });
           return;
         }
       }
 
       if (!(await attachProductImage(options))) return;
+      if (uploadedExtraReferenceImages.length > 0) {
+        const existingRefs = Array.isArray(options.product_images) ? options.product_images : [];
+        const combinedRefs = [...existingRefs, ...uploadedExtraReferenceImages];
+        if (combinedRefs.length > 10) {
+          updateGen(genId, { error: 'Combined image references are limited to 10. Remove a template or reference image and try again.', status: null });
+          return;
+        }
+        options.product_images = combinedRefs;
+        if (combinedRefs[0]) {
+          options.product_image = combinedRefs[0].base64;
+          options.product_image_mime = combinedRefs[0].mimeType;
+        }
+      }
 
       if (exceedsCombinedSizeLimit()) return;
       stream = api.generateAd(projectId, options, handleEvent);
@@ -2384,29 +2431,55 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
             {/* Upload one-off image */}
             {templateSource === TEMPLATE_UPLOAD && (
               <div>
-                {uploadedFile && uploadedPreview ? (
-                  <div className="flex items-start gap-4 p-3 bg-ed-bg border border-ed-line rounded-xl">
-                    <img
-                      src={uploadedPreview}
-                      alt="Uploaded template"
-                      className="w-20 h-20 object-cover rounded-xl border border-ed-line"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-ed-ink truncate">{uploadedFile.name}</p>
-                      <p className="text-[11px] text-ed-ink3 mt-0.5">
-                        {(uploadedFile.size / 1024).toFixed(0)} KB
-                      </p>
+                {uploadedFiles.length > 0 ? (
+                  <div className="p-3 bg-ed-bg border border-ed-line rounded-xl">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-ed-ink">
+                          {uploadedFiles.length} template image{uploadedFiles.length === 1 ? '' : 's'} uploaded
+                        </p>
+                        <p className="text-[11px] text-ed-ink3 mt-0.5">
+                          {(uploadedFiles.reduce((sum, file) => sum + file.size, 0) / 1024).toFixed(0)} KB total
+                        </p>
+                      </div>
                       <button
                         onClick={clearUploadedImage}
-          
-                        className="mt-2 text-[12px] text-ed-rust hover:text-ed-rust transition-colors disabled:opacity-50"
+                        className="text-[12px] text-ed-rust hover:text-ed-rust transition-colors disabled:opacity-50"
                       >
-                        Remove
+                        Remove all
                       </button>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                      {uploadedPreviews.map(({ file, url }, index) => (
+                        <div
+                          key={`${file.name}-${index}`}
+                          data-testid={`adstudio-template-thumb-${index}`}
+                          className="group relative rounded-lg overflow-hidden border border-ed-line aspect-square bg-white"
+                        >
+                          <img
+                            src={url}
+                            alt="Uploaded template"
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Remove template image ${index + 1}`}
+                            data-testid={`adstudio-template-remove-${index}`}
+                            onClick={() => removeUploadedImageAt(index)}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-[12px] leading-none flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-ed-rust"
+                          >
+                            ×
+                          </button>
+                          <div className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[9px] px-1 py-0.5 truncate">
+                            {file.name}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : (
                   <div
+                    data-testid="adstudio-template-dropzone"
                     onClick={() => fileInputRef.current?.click()}
                     onDragOver={handleDragOver}
                     onDragEnter={handleDragOver}
@@ -2430,9 +2503,11 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
                 )}
                 <input
                   ref={fileInputRef}
+                  data-testid="adstudio-template-input"
                   type="file"
+                  multiple
                   accept=".jpg,.jpeg,.png,.webp,.gif"
-                  onChange={e => { if (e.target.files?.[0]) handleFileSelected(e.target.files[0]); }}
+                  onChange={e => { if (e.target.files?.length) handleFileSelected(e.target.files); }}
                   className="hidden"
                 />
               </div>
