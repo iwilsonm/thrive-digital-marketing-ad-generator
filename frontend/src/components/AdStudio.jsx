@@ -956,6 +956,19 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
     if (productFileInputRef.current) productFileInputRef.current.value = '';
   };
 
+  const removeProductImageAt = (indexToRemove) => {
+    setProductPreviews(prev => {
+      const removed = prev[indexToRemove];
+      if (removed?.url) URL.revokeObjectURL(removed.url);
+      return prev.filter((_, index) => index !== indexToRemove);
+    });
+    setProductFiles(prev => {
+      const next = prev.filter((_, index) => index !== indexToRemove);
+      if (next.length === 0 && productFileInputRef.current) productFileInputRef.current.value = '';
+      return next;
+    });
+  };
+
   // --- Generation ---
   const isCustomPromptMode = customPrompt.trim().length > 0;
 
@@ -2700,12 +2713,26 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
               <div className="flex items-center gap-3 p-3 bg-ed-bg border border-ed-line rounded-xl">
                 <div className="grid grid-cols-5 gap-1.5 flex-shrink-0">
                   {productPreviews.slice(0, 10).map((item, index) => (
-                    <img
+                    <div
                       key={`${item.file.name}-${index}`}
-                      src={item.url}
-                      alt={`Reference ${index + 1}`}
-                      className="w-10 h-10 object-cover rounded-lg border border-ed-line"
-                    />
+                      data-testid={`adstudio-reference-thumb-${index}`}
+                      className="group relative w-10 h-10 rounded-lg overflow-hidden border border-ed-line bg-white"
+                    >
+                      <img
+                        src={item.url}
+                        alt={`Reference ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Remove reference image ${index + 1}`}
+                        data-testid={`adstudio-reference-remove-${index}`}
+                        onClick={() => removeProductImageAt(index)}
+                        className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-white text-[11px] leading-none flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-ed-rust"
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -2780,6 +2807,7 @@ export default function AdStudio({ projectId, project, conductorAngles = [], onO
               ) : null}
               <input
                 ref={productFileInputRef}
+                data-testid="adstudio-reference-input"
                 type="file"
                 multiple
                 accept=".jpg,.jpeg,.png,.webp,.gif"

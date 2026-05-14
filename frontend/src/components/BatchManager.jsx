@@ -255,6 +255,19 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const removeUploadedImageAt = (indexToRemove) => {
+    setUploadedPreviews(prev => {
+      const removed = prev[indexToRemove];
+      if (removed?.url) URL.revokeObjectURL(removed.url);
+      return prev.filter((_, index) => index !== indexToRemove);
+    });
+    setUploadedFiles(prev => {
+      const next = prev.filter((_, index) => index !== indexToRemove);
+      if (next.length === 0 && fileInputRef.current) fileInputRef.current.value = '';
+      return next;
+    });
+  };
+
   // Product image handlers
   const handleBatchProductSelected = useCallback((files) => {
     const selected = Array.from(files || []).filter(Boolean);
@@ -289,6 +302,19 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
     batchProductPreviews.forEach(item => URL.revokeObjectURL(item.url));
     setBatchProductPreviews([]);
     if (batchProductInputRef.current) batchProductInputRef.current.value = '';
+  };
+
+  const removeBatchProductImageAt = (indexToRemove) => {
+    setBatchProductPreviews(prev => {
+      const removed = prev[indexToRemove];
+      if (removed?.url) URL.revokeObjectURL(removed.url);
+      return prev.filter((_, index) => index !== indexToRemove);
+    });
+    setBatchProductFiles(prev => {
+      const next = prev.filter((_, index) => index !== indexToRemove);
+      if (next.length === 0 && batchProductInputRef.current) batchProductInputRef.current.value = '';
+      return next;
+    });
   };
 
   // Helper to convert file to base64
@@ -948,8 +974,22 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                       </div>
                       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                         {uploadedPreviews.map(({ file, url }, index) => (
-                          <div key={`${file.name}-${index}`} className="relative rounded-lg overflow-hidden border border-black/5 aspect-square bg-white">
+                          <div
+                            key={`${file.name}-${index}`}
+                            data-testid={`batch-template-thumb-${index}`}
+                            className="group relative rounded-lg overflow-hidden border border-black/5 aspect-square bg-white"
+                          >
                             <img src={url} alt={file.name} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              aria-label={`Remove template image ${index + 1}`}
+                              data-testid={`batch-template-remove-${index}`}
+                              onClick={() => removeUploadedImageAt(index)}
+                              disabled={creating}
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-[12px] leading-none flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-ed-rust disabled:opacity-40"
+                            >
+                              ×
+                            </button>
                             <div className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[9px] px-1 py-0.5 truncate">
                               {file.name}
                             </div>
@@ -983,6 +1023,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                   )}
                   <input
                     ref={fileInputRef}
+                    data-testid="batch-template-upload-input"
                     type="file"
                     multiple
                     accept=".jpg,.jpeg,.png,.webp,.gif"
@@ -1167,8 +1208,22 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
                   </div>
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                     {batchProductPreviews.map(({ file, url }, index) => (
-                      <div key={`${file.name}-${index}`} className="relative rounded-lg overflow-hidden border border-black/5 aspect-square bg-white">
+                      <div
+                        key={`${file.name}-${index}`}
+                        data-testid={`batch-reference-thumb-${index}`}
+                        className="group relative rounded-lg overflow-hidden border border-black/5 aspect-square bg-white"
+                      >
                         <img src={url} alt={file.name} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          aria-label={`Remove reference image ${index + 1}`}
+                          data-testid={`batch-reference-remove-${index}`}
+                          onClick={() => removeBatchProductImageAt(index)}
+                          disabled={creating}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text-[12px] leading-none flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-ed-rust disabled:opacity-40"
+                        >
+                          ×
+                        </button>
                         <div className="absolute inset-x-0 bottom-0 bg-black/55 text-white text-[9px] px-1 py-0.5 truncate">
                           {file.name}
                         </div>
@@ -1205,6 +1260,7 @@ export default function BatchManager({ projectId, project, conductorAngles = [],
               ) : null}
               <input
                 ref={batchProductInputRef}
+                data-testid="batch-reference-upload-input"
                 type="file"
                 multiple
                 accept=".jpg,.jpeg,.png,.webp,.gif"
